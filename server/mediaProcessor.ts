@@ -24,6 +24,7 @@ import type {
   TranscriptionStatus,
   VerificationSummary,
 } from '../src/shared/types';
+import { isVercelBlobConfigured, uploadFileToBlob } from './blobStorage';
 import { getAppConfig } from './config';
 import { db, THUMBS_DIR } from './db';
 import { getGeminiClient, withTimeout } from './geminiClient';
@@ -527,7 +528,17 @@ export async function prepareFastMediaRecord(params: {
     Math.min(1.0, meta.durationSec * 0.15),
     mainThumbPath,
   );
-  const mainThumbUrl = gotMain ? `/api/thumbs/${mediaId}.jpg` : '';
+  let mainThumbUrl = gotMain ? `/api/thumbs/${mediaId}.jpg` : '';
+  if (gotMain && isVercelBlobConfigured()) {
+    const uploadedThumb = await uploadFileToBlob({
+      localPath: mainThumbPath,
+      blobPathname: `thumbs/${mediaId}.jpg`,
+      contentType: 'image/jpeg',
+    }).catch(() => null);
+    if (uploadedThumb?.url) {
+      mainThumbUrl = uploadedThumb.url;
+    }
+  }
 
   const initialScenes: SceneInfo[] = [
     {
@@ -845,7 +856,17 @@ export async function executeAnalysisJob(
   if (!fs.existsSync(mainThumbPath)) {
     await extractThumbnailAt(filePath, Math.min(1.0, meta.durationSec * 0.15), mainThumbPath);
   }
-  const mainThumbUrl = fs.existsSync(mainThumbPath) ? `/api/thumbs/${job.mediaId}.jpg` : '';
+  let mainThumbUrl = fs.existsSync(mainThumbPath) ? `/api/thumbs/${job.mediaId}.jpg` : '';
+  if (fs.existsSync(mainThumbPath) && isVercelBlobConfigured()) {
+    const uploaded = await uploadFileToBlob({
+      localPath: mainThumbPath,
+      blobPathname: `thumbs/${job.mediaId}.jpg`,
+      contentType: 'image/jpeg',
+    }).catch(() => null);
+    if (uploaded?.url) {
+      mainThumbUrl = uploaded.url;
+    }
+  }
 
   if (isJobCancelled(jobId)) {
     throw new Error('Analysis job was cancelled.');

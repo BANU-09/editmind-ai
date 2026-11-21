@@ -123,5 +123,18 @@ export function getAppConfig() {
     s3Bucket: process.env.S3_BUCKET || '',
     s3Region: process.env.S3_REGION || 'auto',
     publicWorkerUrl: process.env.PUBLIC_WORKER_URL || '',
+    blobReadWriteToken: (process.env.BLOB_READ_WRITE_TOKEN || '').trim(),
+    workerUrl: (process.env.WORKER_URL || '').trim().replace(/\/$/, ''),
+    workerSharedSecret: (process.env.WORKER_SHARED_SECRET || '').trim(),
+    workerCallbackBaseUrl: (process.env.WORKER_CALLBACK_BASE_URL || process.env.APP_URL || '')
+      .trim()
+      .replace(/\/$/, ''),
+    workerMode: process.env.WORKER_MODE === '1',
+    multipartChunkBytes: parseBoundedInt(
+      process.env.MULTIPART_CHUNK_BYTES,
+      8 * 1024 * 1024,
+      1024 * 1024,
+      32 * 1024 * 1024,
+    ),
   };
 }

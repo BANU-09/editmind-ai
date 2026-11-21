@@ -7,7 +7,8 @@ import {
   recalculateTimeline,
 } from '../src/shared/timelineEngine';
 import type { ExportJob, ProjectState } from '../src/shared/types';
-import { db, EXPORTS_DIR, MUSIC_DIR } from './db';
+import { db, EXPORTS_DIR, MUSIC_DIR, TEMP_DIR } from './db';
+import { downloadBlobToFile, isVercelBlobConfigured, uploadFileToBlob } from './blobStorage';
 import { probeVideoFile } from './mediaProcessor';
 
 function toAssTimestamp(sec: number): string {
@@ -150,16 +151,17 @@ export async function runExportJob(params: {
     quality,
   } = params;
 
-  const updateJob = (patch: Partial<ExportJob>) => {
+  const updateJob = (patch: Partial<ExportJob> & { blobUrl?: string }) => {
     const current = db.prepare('SELECT * FROM exports WHERE id = ?').get(jobId) as Record<string, unknown> | undefined;
     if (!current) return;
     db.prepare(
-      `UPDATE exports SET status = ?, progress = ?, output_path = ?, output_url = ?, file_size_bytes = ?, duration_sec = ?, error = ? WHERE id = ?`,
+      `UPDATE exports SET status = ?, progress = ?, output_path = ?, output_url = ?, blob_url = ?, file_size_bytes = ?, duration_sec = ?, error = ? WHERE id = ?`,
     ).run(
       patch.status ?? current.status,
       patch.progress ?? current.progress,
       patch.outputUrl ? path.join(EXPORTS_DIR, `${jobId}.mp4`) : current.output_path,
       patch.outputUrl ?? current.output_url,
+      patch.blobUrl ?? current.blob_url,
       patch.fileSizeBytes ?? current.file_size_bytes,
       patch.durationSec ?? current.duration_sec,
       patch.error ?? current.error,
@@ -299,15 +301,25 @@ export async function runExportJob(params: {
     }
 
     // Apply optional custom uploaded music or preset ambient music bed
+    let downloadedMusicTempPath = '';
     if (state.audio.musicEnabled && state.trackVisibility.music) {
       const mVol = Math.max(0.02, Math.min(0.95, state.audio.musicVolume));
       const fadeIn = Math.max(0.05, state.audio.musicFadeInSec);
       const fadeOutDur = Math.max(0.1, state.audio.musicFadeOutSec);
       const fadeOutStart = Math.max(0.05, expectedDuration - fadeOutDur);
       const customName = state.audio.customMusicUrl
-        ? path.basename(state.audio.customMusicUrl)
+        ? path.basename(state.audio.customMusicUrl.split('?')[0])
         : '';
-      const customPath = customName ? path.join(MUSIC_DIR, customName) : '';
+      let customPath = customName ? path.join(MUSIC_DIR, customName) : '';
+      if ((!customPath || !fs.existsSync(customPath)) && state.audio.customMusicUrl?.startsWith('https://')) {
+        downloadedMusicTempPath = path.join(TEMP_DIR, `bgm-${jobId}-${customName || 'track.mp3'}`);
+        try {
+          await downloadBlobToFile(state.audio.customMusicUrl, downloadedMusicTempPath);
+          customPath = downloadedMusicTempPath;
+        } catch {
+          downloadedMusicTempPath = '';
+        }
+      }
 
       if (customPath && fs.existsSync(customPath)) {
         const musicInputIdx = segments.length;
@@ -396,6 +408,9 @@ export async function runExportJob(params: {
     });
 
     if (fs.existsSync(assPath)) fs.rmSync(assPath, { force: true });
+    if (downloadedMusicTempPath && fs.existsSync(downloadedMusicTempPath)) {
+      fs.rmSync(downloadedMusicTempPath, { force: true });
+    }
 
     updateJob({ status: 'validating', progress: 96 });
 
@@ -413,10 +428,26 @@ export async function runExportJob(params: {
       throw new Error('Export validation failed: rendered MP4 has zero duration.');
     }
 
+    let blobUrl: string | undefined;
+    if (isVercelBlobConfigured()) {
+      try {
+        updateJob({ status: 'validating', progress: 98 });
+        const uploaded = await uploadFileToBlob({
+          localPath: outPath,
+          blobPathname: `exports/${jobId}.mp4`,
+          contentType: 'video/mp4',
+        });
+        if (uploaded) blobUrl = uploaded.url;
+      } catch (blobErr) {
+        console.warn('[exporter] Vercel Blob upload skipped/failed:', blobErr instanceof Error ? blobErr.message : blobErr);
+      }
+    }
+
     updateJob({
       status: 'completed',
       progress: 100,
       outputUrl: `/api/exports/${jobId}/download`,
+      blobUrl,
       fileSizeBytes: stats.size,
       durationSec: probed.durationSec,
     });

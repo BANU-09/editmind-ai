@@ -6,7 +6,8 @@ import { v4 as uuid } from 'uuid';
 import { createInitialProjectState, generateThreeVersions } from '../src/shared/timelineEngine';
 import type { HistoryEntry, UrlImportJob } from '../src/shared/types';
 import { getAppConfig } from './config';
-import { db, UPLOADS_DIR } from './db';
+import { db, THUMBS_DIR, UPLOADS_DIR } from './db';
+import { isVercelBlobConfigured, uploadFileToBlob } from './blobStorage';
 import { prepareFastMediaRecord, startBackgroundAnalysisJob } from './mediaProcessor';
 
 function isPrivateOrBlockedIpv4(ip: string): boolean {
@@ -329,10 +330,36 @@ export function startUrlImportJob(params: {
       const vocabJson = JSON.stringify(params.vocabulary || []);
       const createdAt = new Date().toISOString();
 
+      let blobUrl: string | null = null;
+      let blobPathname: string | null = null;
+      if (isVercelBlobConfigured()) {
+        try {
+          const uploaded = await uploadFileToBlob({
+            localPath: destPath,
+            blobPathname: `media/${mediaId}/${path.basename(originalFilename)}`,
+            contentType: mimeType,
+          });
+          if (uploaded) {
+            blobUrl = uploaded.url;
+            blobPathname = uploaded.pathname;
+          }
+          const thumbPath = path.join(THUMBS_DIR, `${mediaId}.jpg`);
+          if (fs.existsSync(thumbPath)) {
+            await uploadFileToBlob({
+              localPath: thumbPath,
+              blobPathname: `thumbs/${mediaId}.jpg`,
+              contentType: 'image/jpeg',
+            }).catch(() => null);
+          }
+        } catch (blobErr) {
+          console.warn('[urlImporter] Blob upload skipped/failed:', blobErr instanceof Error ? blobErr.message : blobErr);
+        }
+      }
+
       db.prepare(
         `INSERT INTO media_assets
-         (id, user_id, guest_token, source_type, source_url, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, created_at)
-         VALUES (?, ?, ?, 'url', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, user_id, guest_token, source_type, source_url, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, blob_url, blob_pathname, created_at)
+         VALUES (?, ?, ?, 'url', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         mediaId,
         params.userId,
@@ -349,6 +376,8 @@ export function startUrlImportJob(params: {
         analysis.analysisMode,
         JSON.stringify(analysis),
         vocabJson,
+        blobUrl,
+        blobPathname,
         createdAt,
       );
 

@@ -173,15 +173,40 @@ db.exec(`
     media_id TEXT,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS multipart_uploads (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    guest_token TEXT,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    chunk_size_bytes INTEGER NOT NULL,
+    total_parts INTEGER NOT NULL,
+    received_parts_json TEXT NOT NULL DEFAULT '[]',
+    staging_dir TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    language_override TEXT,
+    vocabulary_json TEXT NOT NULL DEFAULT '[]',
+    audio_stream_index INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
 
 // Safe incremental column migrations for pre-existing editmind.db files
 const migrations: string[] = [
   "ALTER TABLE media_assets ADD COLUMN source_url TEXT",
   "ALTER TABLE media_assets ADD COLUMN vocabulary_json TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE media_assets ADD COLUMN language_override TEXT",
+  "ALTER TABLE media_assets ADD COLUMN blob_url TEXT",
+  "ALTER TABLE media_assets ADD COLUMN blob_pathname TEXT",
   "ALTER TABLE projects ADD COLUMN vocabulary_json TEXT NOT NULL DEFAULT '[]'",
   "ALTER TABLE analysis_jobs ADD COLUMN language_override TEXT",
   "ALTER TABLE analysis_jobs ADD COLUMN detected_language TEXT",
+  "ALTER TABLE exports ADD COLUMN blob_url TEXT",
 ];
 
 for (const sql of migrations) {

@@ -1,3 +1,4 @@
+import { upload as uploadToVercelBlob } from '@vercel/blob/client';
 import type {
   AnalysisJob,
   EditImpactReport,
@@ -50,7 +51,7 @@ export interface DemoCatalogItem {
 }
 
 const GUEST_KEY = 'editmind_guest_id';
-const TOKEN_KEY = 'editmind_auth_token';
+let inMemoryAuthToken: string | null = null;
 
 export function getGuestId(): string {
   let id = localStorage.getItem(GUEST_KEY);
@@ -62,17 +63,17 @@ export function getGuestId(): string {
 }
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return inMemoryAuthToken;
 }
 
 export function setAuthToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  inMemoryAuthToken = token;
 }
 
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = {
     'x-guest-id': getGuestId(),
+    'x-requested-with': 'XMLHttpRequest',
     ...extra,
   };
   const token = getAuthToken();
@@ -83,6 +84,7 @@ function buildHeaders(extra: Record<string, string> = {}): Record<string, string
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(apiUrl(url), {
     ...init,
+    credentials: 'include',
     headers: buildHeaders({
       ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
       ...(init.headers as Record<string, string> | undefined),
@@ -97,15 +99,36 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+export interface HealthCapabilities {
+  ok: boolean;
+  geminiConfigured: boolean;
+  ffmpegReady: boolean;
+  maxUploadBytes?: number;
+  sttProvider?: string;
+  blobStorageConfigured?: boolean;
+  directMultipartSupported?: boolean;
+  chunkSizeBytes?: number;
+  remoteWorkerConfigured?: boolean;
+  workerMode?: boolean;
+}
+
+let cachedHealth: { ts: number; data: HealthCapabilities } | null = null;
+
+async function getHealthCapabilities(): Promise<HealthCapabilities | null> {
+  if (cachedHealth && Date.now() - cachedHealth.ts < 30_000) {
+    return cachedHealth.data;
+  }
+  try {
+    const data = await requestJson<HealthCapabilities>('/api/health');
+    cachedHealth = { ts: Date.now(), data };
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export const api = {
-  health: () =>
-    requestJson<{
-      ok: boolean;
-      geminiConfigured: boolean;
-      ffmpegReady: boolean;
-      maxUploadBytes?: number;
-      sttProvider?: string;
-    }>('/api/health'),
+  health: () => requestJson<HealthCapabilities>('/api/health'),
 
   listLanguages: () => requestJson<{ languages: LanguageOption[] }>('/api/languages'),
 
@@ -169,7 +192,7 @@ export const api = {
   deleteProject: (id: string) =>
     requestJson<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
 
-  ingestMediaWithProgress: (
+  ingestMediaWithProgress: async (
     file: File | Blob,
     filename: string,
     sourceType: 'upload' | 'recording',
@@ -177,9 +200,132 @@ export const api = {
     onProgress: (pct: number) => void,
     options?: { languageOverride?: string; vocabulary?: string[] },
   ): Promise<HydratedProject> => {
+    const caps = await getHealthCapabilities();
+
+    // Strategy 1: Direct client-to-Vercel-Blob multipart upload (supports up to 2 GB cleanly on Vercel)
+    if (caps?.blobStorageConfigured) {
+      try {
+        const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'video.mp4';
+        const blob = await uploadToVercelBlob(`uploads/${Date.now()}-${cleanName}`, file, {
+          access: 'public',
+          handleUploadUrl: apiUrl('/api/blob/upload-token'),
+          multipart: true,
+          headers: buildHeaders(),
+          onUploadProgress: (evt) => {
+            onProgress(Math.min(78, Math.max(2, Math.round(evt.percentage * 0.78))));
+          },
+        });
+        onProgress(82);
+        const res = await requestJson<{ project: HydratedProject }>('/api/media/ingest-blob', {
+          method: 'POST',
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            blobPathname: blob.pathname,
+            filename,
+            mimeType: file.type || 'video/mp4',
+            sourceType,
+            title,
+            languageOverride:
+              options?.languageOverride && options.languageOverride !== 'auto'
+                ? options.languageOverride
+                : undefined,
+            vocabulary: options?.vocabulary,
+          }),
+        });
+        onProgress(100);
+        return res.project;
+      } catch (blobErr) {
+        console.warn('Direct Blob multipart fallback to chunked/server ingest:', blobErr);
+      }
+    }
+
+    // Strategy 2: Streamed 8 MB chunked multipart upload for large files (> 16 MB) with 3x retry per chunk
+    if (caps?.directMultipartSupported && file.size > 16 * 1024 * 1024) {
+      const init = await requestJson<{
+        uploadId: string;
+        chunkSizeBytes: number;
+        totalParts: number;
+      }>('/api/uploads/multipart/init', {
+        method: 'POST',
+        body: JSON.stringify({
+          filename,
+          mimeType: file.type || 'video/mp4',
+          sizeBytes: file.size,
+          sourceType,
+          title,
+          languageOverride:
+            options?.languageOverride && options.languageOverride !== 'auto'
+              ? options.languageOverride
+              : undefined,
+          vocabulary: options?.vocabulary,
+        }),
+      });
+
+      try {
+        let uploadedBytes = 0;
+        for (let partIndex = 0; partIndex < init.totalParts; partIndex++) {
+          const start = partIndex * init.chunkSizeBytes;
+          const end = Math.min(file.size, start + init.chunkSizeBytes);
+          const slice = file.slice(start, end);
+
+          let attempt = 0;
+          let sent = false;
+          let lastErr: unknown;
+          while (attempt < 3 && !sent) {
+            attempt++;
+            try {
+              const partRes = await fetch(
+                apiUrl(`/api/uploads/multipart/${init.uploadId}/part/${partIndex}`),
+                {
+                  method: 'PUT',
+                  credentials: 'include',
+                  headers: buildHeaders({ 'Content-Type': 'application/octet-stream' }),
+                  body: slice,
+                },
+              );
+              if (!partRes.ok) {
+                const errJson = await partRes.json().catch(() => ({}));
+                throw new Error(
+                  (errJson as { error?: string }).error || `Chunk ${partIndex + 1} failed (${partRes.status})`,
+                );
+              }
+              sent = true;
+            } catch (err) {
+              lastErr = err;
+              if (attempt < 3) {
+                await new Promise((r) => setTimeout(r, 400 * attempt));
+              }
+            }
+          }
+          if (!sent) {
+            throw lastErr instanceof Error ? lastErr : new Error('Multipart chunk upload failed.');
+          }
+          uploadedBytes += end - start;
+          onProgress(Math.min(80, Math.max(2, Math.round((uploadedBytes / file.size) * 80))));
+        }
+
+        onProgress(86);
+        const completed = await requestJson<{ project: HydratedProject }>(
+          `/api/uploads/multipart/${init.uploadId}/complete`,
+          { method: 'POST', body: JSON.stringify({}) },
+        );
+        onProgress(100);
+        return completed.project;
+      } catch (err) {
+        await fetch(apiUrl(`/api/uploads/multipart/${init.uploadId}`), {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: buildHeaders(),
+        }).catch(() => {});
+        throw err;
+      }
+    }
+
+    // Strategy 3: Direct single-POST multipart upload with XHR upload progress
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', apiUrl('/api/media/ingest'));
+      xhr.withCredentials = true;
       const headers = buildHeaders();
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
 

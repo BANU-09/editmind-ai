@@ -19,13 +19,21 @@ import type {
   ProjectRecord,
   ProjectState,
 } from './src/shared/types';
+import { type HandleUploadBody } from '@vercel/blob/client';
 import { planEditFromPrompt } from './server/aiEditor';
-import { getAppConfig, SUPPORTED_LANGUAGES } from './server/config';
-import { db, DEMOS_DIR, EXPORTS_DIR, MUSIC_DIR, THUMBS_DIR, UPLOADS_DIR } from './server/db';
+import {
+  downloadBlobToFile,
+  handleBlobClientUpload,
+  isVercelBlobConfigured,
+  uploadFileToBlob,
+} from './server/blobStorage';
+import { getAppConfig, STRICT_MAX_UPLOAD_BYTES, SUPPORTED_LANGUAGES } from './server/config';
+import { db, DEMOS_DIR, EXPORTS_DIR, MUSIC_DIR, TEMP_DIR, THUMBS_DIR, UPLOADS_DIR } from './server/db';
 import { ensureDemoLibraryReady, getDemoCatalogMeta } from './server/demoGenerator';
 import { runExportJob } from './server/exporter';
 import { hasGeminiKey } from './server/geminiClient';
 import {
+  executeAnalysisJob,
   prepareFastMediaRecord,
   probeVideoFile,
   resumeIncompleteAnalysisJobs,
@@ -41,8 +49,17 @@ import {
   getLatestAnalysisJobForMedia,
   requestCancelAnalysisJob,
   translateProjectTranscript,
+  updateAnalysisJobRow,
 } from './server/transcriber';
 import { getUrlImportJob, startUrlImportJob } from './server/urlImporter';
+import {
+  dispatchAnalyzeToWorker,
+  dispatchExportToWorker,
+  dispatchUrlImportToWorker,
+  isAuthorizedWorkerRequest,
+  isRemoteWorkerConfigured,
+  sendWorkerCallback,
+} from './server/workerBridge';
 
 dotenv.config();
 
@@ -96,6 +113,42 @@ function sendV1Error(
   });
 }
 
+function resolveConfinedPath(baseDir: string, untrustedName: string): string | null {
+  const safeBase = path.resolve(baseDir);
+  const cleanName = path.basename(String(untrustedName || '').trim());
+  if (!cleanName || cleanName === '.' || cleanName === '..') return null;
+  const target = path.resolve(safeBase, cleanName);
+  if (!target.startsWith(safeBase + path.sep)) return null;
+  return target;
+}
+
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!cookieHeader) return result;
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const key = part.slice(0, idx).trim();
+    const val = decodeURIComponent(part.slice(idx + 1).trim());
+    if (key) result[key] = val;
+  }
+  return result;
+}
+
+function setSessionCookie(res: Response, token: string, maxAgeSec: number) {
+  res.setHeader(
+    'Set-Cookie',
+    `editmind_session=${encodeURIComponent(token)}; Max-Age=${maxAgeSec}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`,
+  );
+}
+
+function clearSessionCookie(res: Response) {
+  res.setHeader(
+    'Set-Cookie',
+    'editmind_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+  );
+}
+
 function streamMediaWithRanges(req: Request, res: Response, filePath: string, mimeType: string) {
   if (!fs.existsSync(filePath)) {
     res.status(404).json({ error: 'Media file not found on server.' });
@@ -132,7 +185,11 @@ function streamMediaWithRanges(req: Request, res: Response, filePath: string, mi
   }
 }
 
-function getAuthContext(req: Request): { userId: string | null; guestToken: string | null } {
+function getAuthContext(req: Request): {
+  userId: string | null;
+  guestToken: string | null;
+  authViaCookie: boolean;
+} {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
@@ -140,11 +197,35 @@ function getAuthContext(req: Request): { userId: string | null; guestToken: stri
       .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?')
       .get(token) as { user_id: string; expires_at: string } | undefined;
     if (row && new Date(row.expires_at).getTime() > Date.now()) {
-      return { userId: row.user_id, guestToken: null };
+      return { userId: row.user_id, guestToken: null, authViaCookie: false };
+    }
+  }
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies.editmind_session) {
+    const row = db
+      .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?')
+      .get(cookies.editmind_session) as { user_id: string; expires_at: string } | undefined;
+    if (row && new Date(row.expires_at).getTime() > Date.now()) {
+      return { userId: row.user_id, guestToken: null, authViaCookie: true };
     }
   }
   const guest = (req.headers['x-guest-id'] as string) || null;
-  return { userId: null, guestToken: guest };
+  return { userId: null, guestToken: guest, authViaCookie: false };
+}
+
+function canAccessOwnedRecord(
+  ctx: { userId: string | null; guestToken: string | null },
+  row: { user_id?: unknown; guest_token?: unknown; source_type?: unknown },
+): boolean {
+  if (row.source_type === 'demo') return true;
+  if (row.user_id) {
+    return Boolean(ctx.userId && ctx.userId === row.user_id);
+  }
+  if (row.guest_token) {
+    // Allow legacy unclaimed guest sessions or matching guest token / migrated signed-in user
+    return Boolean(ctx.guestToken && ctx.guestToken === row.guest_token);
+  }
+  return true;
 }
 
 function hydrateProjectRow(row: Record<string, unknown>): ProjectRecord & { media: unknown } {
@@ -207,6 +288,7 @@ function hydrateProjectRow(row: Record<string, unknown>): ProjectRecord & { medi
           id: mediaRow.id,
           sourceType: mediaRow.source_type,
           sourceUrl: (mediaRow.source_url as string | undefined) || undefined,
+          blobUrl: (mediaRow.blob_url as string | undefined) || undefined,
           filename: mediaRow.filename,
           mimeType: mediaRow.mime_type,
           url:
@@ -279,24 +361,41 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
 
-  // Configurable CORS middleware for split Vercel frontend + dedicated backend worker
+  // Configurable CORS & Cookie-CSRF protection for split Vercel frontend + dedicated Cloud Run backend worker
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (origin && (cfg.corsOrigins.includes('*') || cfg.corsOrigins.includes(origin))) {
+    const isWildcard = cfg.corsOrigins.includes('*');
+    const isAllowed = Boolean(
+      origin &&
+        (isWildcard ||
+          cfg.corsOrigins.includes(origin) ||
+          origin.endsWith('.vercel.app') ||
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:')),
+    );
+    if (origin && isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Vary', 'Origin');
-    } else if (cfg.corsOrigins.includes('*')) {
-      res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, x-guest-id, Idempotency-Key, Range',
+      'Content-Type, Authorization, x-guest-id, Idempotency-Key, Range, x-worker-secret, x-requested-with',
     );
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
     if (req.method === 'OPTIONS') {
       res.status(204).end();
       return;
+    }
+
+    // Verify Origin matches Host / allowed origin on cookie-authenticated mutations
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const ctx = getAuthContext(req);
+      if (ctx.authViaCookie && origin && !isAllowed) {
+        res.status(403).json({ error: 'Cross-origin mutation blocked.' });
+        return;
+      }
     }
     next();
   });
@@ -305,7 +404,9 @@ async function startServer() {
   const demoReadyPromise = ensureDemoLibraryReady()
     .then(() => {
       console.log('[EDITMIND AI] Demo library ready.');
-      resumeIncompleteAnalysisJobs();
+      if (!cfg.workerMode) {
+        resumeIncompleteAnalysisJobs();
+      }
     })
     .catch((err) => console.error('[EDITMIND AI] Demo library error:', err));
 
@@ -317,6 +418,11 @@ async function startServer() {
       ffmpegReady: true,
       maxUploadBytes: cfg.maxUploadBytes,
       sttProvider: cfg.sttProvider,
+      blobStorageConfigured: isVercelBlobConfigured(),
+      directMultipartSupported: true,
+      chunkSizeBytes: cfg.multipartChunkBytes,
+      remoteWorkerConfigured: isRemoteWorkerConfigured(),
+      workerMode: cfg.workerMode,
     });
   });
 
@@ -373,6 +479,7 @@ async function startServer() {
         );
       }
 
+      setSessionCookie(res, token, 30 * 24 * 3600);
       res.json({
         token,
         user: { id, email: email.toLowerCase(), name: (name || email.split('@')[0]).trim() },
@@ -405,6 +512,7 @@ async function startServer() {
         user.id,
         expiresAt,
       );
+      setSessionCookie(res, token, 30 * 24 * 3600);
       res.json({
         token,
         user: { id: user.id, email: user.email, name: user.name },
@@ -431,6 +539,11 @@ async function startServer() {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       db.prepare('DELETE FROM sessions WHERE token = ?').run(authHeader.slice(7).trim());
     }
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies.editmind_session) {
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(cookies.editmind_session);
+    }
+    clearSessionCookie(res);
     res.json({ ok: true });
   });
 
@@ -470,14 +583,190 @@ async function startServer() {
   });
 
   app.get('/api/thumbs/:filename', (req, res) => {
-    const safeName = path.basename(req.params.filename);
-    const thumbPath = path.join(THUMBS_DIR, safeName);
-    if (!fs.existsSync(thumbPath)) {
+    const thumbPath = resolveConfinedPath(THUMBS_DIR, req.params.filename);
+    if (!thumbPath || !fs.existsSync(thumbPath)) {
       res.status(404).end();
       return;
     }
     res.sendFile(thumbPath);
   });
+
+  // Helper: create media_assets + project + dispatch local or remote Cloud Run worker analysis job
+  async function createIngestedMediaAndProject(params: {
+    filePath: string;
+    originalFilename: string;
+    mimeType: string;
+    sourceType: 'upload' | 'recording';
+    title: string;
+    audioStreamIndex: number;
+    languageOverride?: string;
+    vocabulary: string[];
+    ctx: { userId: string | null; guestToken: string | null };
+    blobUrl?: string;
+    blobPathname?: string;
+    waitForSync?: boolean;
+  }) {
+    const {
+      filePath,
+      originalFilename,
+      mimeType,
+      sourceType,
+      title,
+      audioStreamIndex,
+      languageOverride,
+      vocabulary,
+      ctx,
+      waitForSync,
+    } = params;
+
+    const mediaId = `med-${uuid()}`;
+    const { analysis, thumbnailUrl } = await prepareFastMediaRecord({
+      mediaId,
+      filePath,
+      filename: originalFilename,
+      audioStreamIndex,
+    });
+    analysis.vocabulary = vocabulary;
+    analysis.selectedLanguageOverride = languageOverride || 'auto';
+
+    let resolvedBlobUrl = params.blobUrl || null;
+    let resolvedBlobPathname = params.blobPathname || null;
+    if (!resolvedBlobUrl && isVercelBlobConfigured()) {
+      const uploaded = await uploadFileToBlob({
+        localPath: filePath,
+        blobPathname: `media/${mediaId}/${path.basename(originalFilename)}`,
+        contentType: mimeType,
+      }).catch(() => null);
+      if (uploaded) {
+        resolvedBlobUrl = uploaded.url;
+        resolvedBlobPathname = uploaded.pathname;
+      }
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO media_assets
+       (id, user_id, guest_token, source_type, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, language_override, blob_url, blob_pathname, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      mediaId,
+      ctx.userId,
+      ctx.guestToken,
+      sourceType,
+      originalFilename,
+      mimeType,
+      filePath,
+      thumbnailUrl || '/api/demos/demo-keynote/thumb',
+      analysis.durationSec,
+      analysis.width,
+      analysis.height,
+      analysis.hasAudio ? 1 : 0,
+      analysis.analysisMode,
+      JSON.stringify(analysis),
+      JSON.stringify(vocabulary),
+      languageOverride || null,
+      resolvedBlobUrl,
+      resolvedBlobPathname,
+      now,
+    );
+
+    const projectId = `prj-${uuid()}`;
+    const initialState = createInitialProjectState(analysis);
+    const versions = generateThreeVersions(analysis);
+    const initialHistory: HistoryEntry[] = [
+      {
+        id: uuid(),
+        timestamp: now,
+        label: 'Project Created',
+        durationAfter: initialState.duration,
+        stateSnapshot: initialState,
+      },
+    ];
+
+    db.prepare(
+      `INSERT INTO projects
+       (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+    ).run(
+      projectId,
+      ctx.userId,
+      ctx.guestToken,
+      title,
+      mediaId,
+      thumbnailUrl || '/api/demos/demo-keynote/thumb',
+      JSON.stringify(initialState),
+      JSON.stringify(initialHistory),
+      JSON.stringify(versions),
+      JSON.stringify(vocabulary),
+      now,
+      now,
+    );
+
+    // Dispatch to remote Cloud Run worker if configured and source exists in Vercel Blob
+    if (!waitForSync && isRemoteWorkerConfigured() && resolvedBlobUrl) {
+      const jobId = `job-${uuid()}`;
+      db.prepare(
+        `INSERT INTO analysis_jobs
+         (id, media_id, project_id, selected_audio_stream, language_override, status, overall_progress, audio_extraction_status, transcription_status, chunk_total, chunk_completed, chunk_failed, alignment_status, caption_status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', 5, 'pending', 'pending', 0, 0, 0, 'pending', 'pending', ?, ?)`,
+      ).run(jobId, mediaId, projectId, audioStreamIndex, languageOverride || 'auto', now, now);
+
+      try {
+        await dispatchAnalyzeToWorker({
+          jobId,
+          mediaId,
+          projectId,
+          sourceBlobUrl: resolvedBlobUrl,
+          filename: originalFilename,
+          audioStreamIndex,
+          languageOverride,
+          vocabulary,
+          callbackUrl: cfg.workerCallbackBaseUrl
+            ? `${cfg.workerCallbackBaseUrl}/api/internal/worker-callback`
+            : undefined,
+        });
+        const projectRow = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Record<
+          string,
+          unknown
+        >;
+        return {
+          mediaId,
+          projectId,
+          project: hydrateProjectRow(projectRow),
+          job: getAnalysisJob(jobId)!,
+        };
+      } catch (dispatchErr) {
+        console.warn(
+          '[workerBridge] Remote dispatch failed, running analysis in local background worker:',
+          dispatchErr instanceof Error ? dispatchErr.message : dispatchErr,
+        );
+        db.prepare('DELETE FROM analysis_jobs WHERE id = ?').run(jobId);
+      }
+    }
+
+    const { job, promise } = startBackgroundAnalysisJob({
+      mediaId,
+      projectId,
+      audioStreamIndex,
+      languageOverride,
+      vocabulary,
+    });
+
+    if (waitForSync) {
+      await promise.catch(() => {});
+    }
+
+    const projectRow = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Record<
+      string,
+      unknown
+    >;
+    return {
+      mediaId,
+      projectId,
+      project: hydrateProjectRow(projectRow),
+      job: getAnalysisJob(job.id) || job,
+    };
+  }
 
   // Upload or record real user media (NEVER substitutes demo media!)
   // Returns fast initial project immediately by default while background chunked transcription runs; pass ?sync=1 to await completion.
@@ -500,7 +789,6 @@ async function startServer() {
       const vocabulary = parseVocabularyInput(req.body.vocabulary);
 
       const ctx = getAuthContext(req);
-      const mediaId = `med-${uuid()}`;
       const mimeType =
         file.mimetype && file.mimetype !== 'application/octet-stream'
           ? file.mimetype
@@ -512,92 +800,22 @@ async function startServer() {
                 ? 'video/x-matroska'
                 : 'video/mp4';
 
-      const { analysis, thumbnailUrl } = await prepareFastMediaRecord({
-        mediaId,
+      const result = await createIngestedMediaAndProject({
         filePath: file.path,
-        filename: file.originalname,
-        audioStreamIndex,
-      });
-      analysis.vocabulary = vocabulary;
-      analysis.selectedLanguageOverride = languageOverride || 'auto';
-
-      const now = new Date().toISOString();
-      db.prepare(
-        `INSERT INTO media_assets
-         (id, user_id, guest_token, source_type, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, language_override, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        mediaId,
-        ctx.userId,
-        ctx.guestToken,
-        sourceType,
-        file.originalname,
+        originalFilename: file.originalname,
         mimeType,
-        file.path,
-        thumbnailUrl || '/api/demos/demo-keynote/thumb',
-        analysis.durationSec,
-        analysis.width,
-        analysis.height,
-        analysis.hasAudio ? 1 : 0,
-        analysis.analysisMode,
-        JSON.stringify(analysis),
-        JSON.stringify(vocabulary),
-        languageOverride || null,
-        now,
-      );
-
-      // Create project linked strictly to this unique mediaId
-      const projectId = `prj-${uuid()}`;
-      const initialState = createInitialProjectState(analysis);
-      const versions = generateThreeVersions(analysis);
-      const initialHistory: HistoryEntry[] = [
-        {
-          id: uuid(),
-          timestamp: now,
-          label: 'Project Created',
-          durationAfter: initialState.duration,
-          stateSnapshot: initialState,
-        },
-      ];
-
-      db.prepare(
-        `INSERT INTO projects
-         (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-      ).run(
-        projectId,
-        ctx.userId,
-        ctx.guestToken,
+        sourceType,
         title,
-        mediaId,
-        thumbnailUrl,
-        JSON.stringify(initialState),
-        JSON.stringify(initialHistory),
-        JSON.stringify(versions),
-        JSON.stringify(vocabulary),
-        now,
-        now,
-      );
-
-      const { job, promise } = startBackgroundAnalysisJob({
-        mediaId,
-        projectId,
         audioStreamIndex,
         languageOverride,
         vocabulary,
+        ctx,
+        waitForSync: req.query.sync === '1',
       });
 
-      if (req.query.sync === '1') {
-        await promise.catch(() => {});
-      }
-
-      const projectRow = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Record<
-        string,
-        unknown
-      >;
       res.json({
-        project: hydrateProjectRow(projectRow),
-        job: getAnalysisJob(job.id) || job,
+        project: result.project,
+        job: result.job,
       });
     } catch (err) {
       console.error('Ingest failed:', err);
@@ -605,6 +823,313 @@ async function startServer() {
         error: err instanceof Error ? err.message : 'Failed to process uploaded video.',
       });
     }
+  });
+
+  // Vercel Blob direct client multipart token exchange (up to 2 GB directly from browser to Vercel Blob)
+  app.post('/api/blob/upload-token', async (req, res) => {
+    try {
+      const ctx = getAuthContext(req);
+      const jsonResponse = await handleBlobClientUpload({
+        request: req,
+        body: req.body as HandleUploadBody,
+        userId: ctx.userId,
+        guestToken: ctx.guestToken,
+      });
+      res.json(jsonResponse);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Failed to issue Vercel Blob upload token.',
+      });
+    }
+  });
+
+  // Ingest media uploaded directly to Vercel Blob
+  app.post('/api/media/ingest-blob', async (req, res) => {
+    try {
+      const {
+        blobUrl,
+        blobPathname,
+        filename,
+        mimeType,
+        sourceType,
+        title,
+        audioStreamIndex = 0,
+        languageOverride,
+        vocabulary,
+      } = (req.body || {}) as {
+        blobUrl?: string;
+        blobPathname?: string;
+        filename?: string;
+        mimeType?: string;
+        sourceType?: 'upload' | 'recording';
+        title?: string;
+        audioStreamIndex?: number;
+        languageOverride?: string;
+        vocabulary?: unknown;
+      };
+      if (!blobUrl) {
+        res.status(400).json({ error: 'blobUrl is required.' });
+        return;
+      }
+
+      const origName = (filename || 'uploaded-video.mp4').trim();
+      const ext = path.extname(origName) || '.mp4';
+      const localPath = path.join(UPLOADS_DIR, `${uuid()}${ext}`);
+      await downloadBlobToFile(blobUrl, localPath);
+
+      const ctx = getAuthContext(req);
+      const result = await createIngestedMediaAndProject({
+        filePath: localPath,
+        originalFilename: origName,
+        mimeType: mimeType || 'video/mp4',
+        sourceType: sourceType === 'recording' ? 'recording' : 'upload',
+        title: (title || '').trim() || path.parse(origName).name || 'Uploaded Video',
+        audioStreamIndex: Number.isFinite(Number(audioStreamIndex)) ? Number(audioStreamIndex) : 0,
+        languageOverride: languageOverride?.trim() || undefined,
+        vocabulary: parseVocabularyInput(vocabulary),
+        ctx,
+        blobUrl,
+        blobPathname,
+        waitForSync: req.query.sync === '1',
+      });
+
+      res.json({
+        project: result.project,
+        job: result.job,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Failed to ingest Blob media.',
+      });
+    }
+  });
+
+  // Streamed chunked multipart upload fallback (up to 2 GB / 60 min without needing Vercel Blob token)
+  app.post('/api/uploads/multipart/init', (req, res) => {
+    try {
+      const {
+        filename,
+        mimeType,
+        sizeBytes,
+        sourceType,
+        title,
+        languageOverride,
+        vocabulary,
+        audioStreamIndex = 0,
+      } = (req.body || {}) as {
+        filename?: string;
+        mimeType?: string;
+        sizeBytes?: number;
+        sourceType?: 'upload' | 'recording';
+        title?: string;
+        languageOverride?: string;
+        vocabulary?: unknown;
+        audioStreamIndex?: number;
+      };
+      if (!filename || !sizeBytes || !Number.isFinite(Number(sizeBytes)) || Number(sizeBytes) <= 0) {
+        res.status(400).json({ error: 'Valid filename and positive sizeBytes are required.' });
+        return;
+      }
+      if (Number(sizeBytes) > cfg.maxUploadBytes) {
+        res.status(413).json({ error: 'File size exceeds the strict 2 GB upload limit.' });
+        return;
+      }
+
+      const uploadId = `mpu-${uuid()}`;
+      const chunkSizeBytes = cfg.multipartChunkBytes;
+      const totalParts = Math.max(1, Math.ceil(Number(sizeBytes) / chunkSizeBytes));
+      const stagingDir = path.join(TEMP_DIR, uploadId);
+      fs.mkdirSync(stagingDir, { recursive: true });
+      const ctx = getAuthContext(req);
+      const now = new Date().toISOString();
+      const parsedVocab = parseVocabularyInput(vocabulary);
+
+      db.prepare(
+        `INSERT INTO multipart_uploads
+         (id, user_id, guest_token, filename, mime_type, size_bytes, chunk_size_bytes, total_parts, received_parts_json, staging_dir, source_type, title, language_override, vocabulary_json, audio_stream_index, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, 'uploading', ?, ?)`,
+      ).run(
+        uploadId,
+        ctx.userId,
+        ctx.guestToken,
+        path.basename(filename),
+        mimeType || 'video/mp4',
+        Number(sizeBytes),
+        chunkSizeBytes,
+        totalParts,
+        stagingDir,
+        sourceType === 'recording' ? 'recording' : 'upload',
+        (title || '').trim() || path.parse(filename).name || 'Uploaded Video',
+        languageOverride?.trim() || null,
+        JSON.stringify(parsedVocab),
+        Number.isFinite(Number(audioStreamIndex)) ? Number(audioStreamIndex) : 0,
+        now,
+        now,
+      );
+
+      res.json({ uploadId, chunkSizeBytes, totalParts });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Failed to initialize multipart upload.',
+      });
+    }
+  });
+
+  app.put(
+    '/api/uploads/multipart/:uploadId/part/:partIndex',
+    express.raw({ type: '*/*', limit: '32mb' }),
+    (req, res) => {
+      try {
+        const row = db
+          .prepare('SELECT * FROM multipart_uploads WHERE id = ?')
+          .get(req.params.uploadId) as Record<string, unknown> | undefined;
+        if (!row) {
+          res.status(404).json({ error: 'Multipart upload session not found.' });
+          return;
+        }
+        const ctx = getAuthContext(req);
+        if (!canAccessOwnedRecord(ctx, row)) {
+          res.status(403).json({ error: 'Access denied to this upload session.' });
+          return;
+        }
+        const partIdx = parseInt(req.params.partIndex, 10);
+        const totalParts = Number(row.total_parts);
+        if (!Number.isInteger(partIdx) || partIdx < 0 || partIdx >= totalParts) {
+          res.status(400).json({ error: `Invalid partIndex ${req.params.partIndex}.` });
+          return;
+        }
+        const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+        if (bodyBuf.length === 0) {
+          res.status(400).json({ error: 'Uploaded chunk part is empty.' });
+          return;
+        }
+
+        const partPath = resolveConfinedPath(row.staging_dir as string, `part-${String(partIdx).padStart(6, '0')}`);
+        if (!partPath) {
+          res.status(400).json({ error: 'Invalid part path.' });
+          return;
+        }
+        fs.writeFileSync(partPath, bodyBuf);
+
+        const received = new Set<number>(JSON.parse((row.received_parts_json as string) || '[]') as number[]);
+        received.add(partIdx);
+        const receivedArr = Array.from(received).sort((a, b) => a - b);
+
+        db.prepare('UPDATE multipart_uploads SET received_parts_json = ?, updated_at = ? WHERE id = ?').run(
+          JSON.stringify(receivedArr),
+          new Date().toISOString(),
+          row.id,
+        );
+
+        res.json({ ok: true, partIndex: partIdx, receivedCount: receivedArr.length, totalParts });
+      } catch (err) {
+        res.status(500).json({
+          error: err instanceof Error ? err.message : 'Failed to store upload chunk.',
+        });
+      }
+    },
+  );
+
+  app.post('/api/uploads/multipart/:uploadId/complete', async (req, res) => {
+    try {
+      const row = db
+        .prepare('SELECT * FROM multipart_uploads WHERE id = ?')
+        .get(req.params.uploadId) as Record<string, unknown> | undefined;
+      if (!row) {
+        res.status(404).json({ error: 'Multipart upload session not found.' });
+        return;
+      }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, row)) {
+        res.status(403).json({ error: 'Access denied to this upload session.' });
+        return;
+      }
+
+      const totalParts = Number(row.total_parts);
+      const stagingDir = row.staging_dir as string;
+      const ext = path.extname(row.filename as string) || '.mp4';
+      const assembledPath = path.join(UPLOADS_DIR, `${uuid()}${ext}`);
+
+      const writeStream = fs.createWriteStream(assembledPath);
+      let totalAssembledBytes = 0;
+
+      for (let i = 0; i < totalParts; i++) {
+        const partPath = resolveConfinedPath(stagingDir, `part-${String(i).padStart(6, '0')}`);
+        if (!partPath || !fs.existsSync(partPath)) {
+          writeStream.destroy();
+          fs.rmSync(assembledPath, { force: true });
+          res.status(400).json({ error: `Missing upload part ${i} of ${totalParts}.` });
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          const readStream = fs.createReadStream(partPath);
+          readStream.on('data', (chunk: Buffer | string) => {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            totalAssembledBytes += buf.length;
+            if (totalAssembledBytes > cfg.maxUploadBytes) {
+              readStream.destroy(new Error('Assembled upload exceeds 2 GB ceiling.'));
+              return;
+            }
+            if (!writeStream.write(buf)) {
+              readStream.pause();
+              writeStream.once('drain', () => readStream.resume());
+            }
+          });
+          readStream.on('end', () => resolve());
+          readStream.on('error', reject);
+        });
+      }
+      await new Promise<void>((resolve) => writeStream.end(() => resolve()));
+
+      // Clean temporary staged chunks
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+      db.prepare("UPDATE multipart_uploads SET status = 'completed', updated_at = ? WHERE id = ?").run(
+        new Date().toISOString(),
+        row.id,
+      );
+
+      const result = await createIngestedMediaAndProject({
+        filePath: assembledPath,
+        originalFilename: row.filename as string,
+        mimeType: (row.mime_type as string) || 'video/mp4',
+        sourceType: row.source_type === 'recording' ? 'recording' : 'upload',
+        title: (row.title as string) || 'Uploaded Video',
+        audioStreamIndex: Number(row.audio_stream_index ?? 0),
+        languageOverride: (row.language_override as string | null) || undefined,
+        vocabulary: JSON.parse((row.vocabulary_json as string) || '[]') as string[],
+        ctx,
+        waitForSync: req.query.sync === '1',
+      });
+
+      res.json({
+        project: result.project,
+        job: result.job,
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Failed to assemble multipart upload.',
+      });
+    }
+  });
+
+  app.delete('/api/uploads/multipart/:uploadId', (req, res) => {
+    const row = db
+      .prepare('SELECT * FROM multipart_uploads WHERE id = ?')
+      .get(req.params.uploadId) as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ error: 'Multipart upload session not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied.' });
+      return;
+    }
+    if (row.staging_dir && fs.existsSync(row.staging_dir as string)) {
+      fs.rmSync(row.staging_dir as string, { recursive: true, force: true });
+    }
+    db.prepare('DELETE FROM multipart_uploads WHERE id = ?').run(row.id);
+    res.json({ ok: true });
   });
 
   // Direct URL Video Intake (SSRF-safe, strictly 2 GB capped, async job + optional ?sync=1)
@@ -661,11 +1186,19 @@ async function startServer() {
   });
 
   app.get('/api/url-imports/:id', (req, res) => {
-    const job = getUrlImportJob(req.params.id);
-    if (!job) {
+    const row = db.prepare('SELECT user_id, guest_token FROM url_imports WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) {
       res.status(404).json({ error: 'URL import job not found.' });
       return;
     }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied to this URL import job.' });
+      return;
+    }
+    const job = getUrlImportJob(req.params.id)!;
     const projRow = job.projectId
       ? (db.prepare('SELECT * FROM projects WHERE id = ?').get(job.projectId) as
           | Record<string, unknown>
@@ -736,6 +1269,11 @@ async function startServer() {
         .get(req.params.id) as Record<string, unknown> | undefined;
       if (!mediaRow) {
         res.status(404).json({ error: 'Media asset not found.' });
+        return;
+      }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, mediaRow)) {
+        res.status(403).json({ error: 'Access denied to this media asset.' });
         return;
       }
       const filePath = mediaRow.file_path as string;
@@ -813,6 +1351,11 @@ async function startServer() {
         res.status(404).json({ error: 'Media asset not found.' });
         return;
       }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, mediaRow)) {
+        res.status(403).json({ error: 'Access denied to this media asset.' });
+        return;
+      }
       const { audioStreamIndex = 0, projectId, languageOverride, vocabulary } = (req.body || {}) as {
         audioStreamIndex?: number;
         projectId?: string;
@@ -873,6 +1416,14 @@ async function startServer() {
       res.status(404).json({ error: 'Analysis job not found.' });
       return;
     }
+    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(job.mediaId) as
+      | Record<string, unknown>
+      | undefined;
+    const ctx = getAuthContext(req);
+    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
+      res.status(403).json({ error: 'Access denied to this analysis job.' });
+      return;
+    }
     const chunks = db
       .prepare(
         `SELECT id, chunk_index, source_start, source_end, status, provider, attempt_count, error
@@ -888,6 +1439,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const media = db
@@ -908,6 +1464,14 @@ async function startServer() {
       res.status(404).json({ error: 'Analysis job not found.' });
       return;
     }
+    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(job.mediaId) as
+      | Record<string, unknown>
+      | undefined;
+    const ctx = getAuthContext(req);
+    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
+      res.status(403).json({ error: 'Access denied.' });
+      return;
+    }
     const promise = retryFailedJobChunks(job.id);
     if (req.query.sync === '1') {
       const analysis = await promise;
@@ -922,6 +1486,14 @@ async function startServer() {
     const prev = getAnalysisJob(req.params.jobId);
     if (!prev) {
       res.status(404).json({ error: 'Analysis job not found.' });
+      return;
+    }
+    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(prev.mediaId) as
+      | Record<string, unknown>
+      | undefined;
+    const ctx = getAuthContext(req);
+    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
+      res.status(403).json({ error: 'Access denied.' });
       return;
     }
     const { job, promise } = startBackgroundAnalysisJob({
@@ -943,6 +1515,14 @@ async function startServer() {
       res.status(404).json({ error: 'Analysis job not found.' });
       return;
     }
+    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(job.mediaId) as
+      | Record<string, unknown>
+      | undefined;
+    const ctx = getAuthContext(req);
+    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
+      res.status(403).json({ error: 'Access denied.' });
+      return;
+    }
     requestCancelAnalysisJob(job.id);
     res.json({ ok: true, job: getAnalysisJob(job.id) });
   });
@@ -950,6 +1530,18 @@ async function startServer() {
   // Upload real background music audio file for project
   app.post('/api/projects/:id/music', musicUpload.single('audio'), async (req, res) => {
     try {
+      const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as
+        | Record<string, unknown>
+        | undefined;
+      if (!proj) {
+        res.status(404).json({ error: 'Project not found.' });
+        return;
+      }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
+        return;
+      }
       const file = req.file;
       if (!file) {
         res.status(400).json({ error: 'No audio file provided.' });
@@ -957,8 +1549,17 @@ async function startServer() {
       }
       const meta = await probeVideoFile(file.path).catch(() => ({ durationSec: 30 }));
       const storedFilename = path.basename(file.path);
+      let musicUrl = `/api/music/${storedFilename}`;
+      if (isVercelBlobConfigured()) {
+        const uploaded = await uploadFileToBlob({
+          localPath: file.path,
+          blobPathname: `music/${storedFilename}`,
+          contentType: file.mimetype || 'audio/mpeg',
+        }).catch(() => null);
+        if (uploaded?.url) musicUrl = uploaded.url;
+      }
       res.json({
-        url: `/api/music/${storedFilename}`,
+        url: musicUrl,
         filename: file.originalname,
         storedFilename,
         durationSec: meta.durationSec || 30,
@@ -969,9 +1570,12 @@ async function startServer() {
   });
 
   app.get('/api/music/:filename', (req, res) => {
-    const safeName = path.basename(req.params.filename);
-    const musicPath = path.join(MUSIC_DIR, safeName);
-    const ext = path.extname(safeName).toLowerCase();
+    const musicPath = resolveConfinedPath(MUSIC_DIR, req.params.filename);
+    if (!musicPath) {
+      res.status(404).end();
+      return;
+    }
+    const ext = path.extname(musicPath).toLowerCase();
     const mime =
       ext === '.wav'
         ? 'audio/wav'
@@ -1064,6 +1668,11 @@ async function startServer() {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
+      return;
+    }
     res.json({ project: hydrateProjectRow(row) });
   });
 
@@ -1073,6 +1682,11 @@ async function startServer() {
       | undefined;
     if (!row) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const { title, state, history, historyIndex, versions } = req.body as {
@@ -1111,6 +1725,11 @@ async function startServer() {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
+      return;
+    }
     const newId = `prj-${uuid()}`;
     const now = new Date().toISOString();
     db.prepare(
@@ -1139,6 +1758,18 @@ async function startServer() {
   });
 
   app.delete('/api/projects/:id', (req, res) => {
+    const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) {
+      res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, row)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
+      return;
+    }
     db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
   });
@@ -1160,6 +1791,11 @@ async function startServer() {
         | undefined;
       if (!proj) {
         res.status(404).json({ error: 'Project not found.' });
+        return;
+      }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
         return;
       }
       const media = db
@@ -1205,6 +1841,11 @@ async function startServer() {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
+      return;
+    }
     const media = db
       .prepare('SELECT * FROM media_assets WHERE id = ?')
       .get(proj.media_id as string) as Record<string, unknown> | undefined;
@@ -1227,6 +1868,11 @@ async function startServer() {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
+      return;
+    }
     const media = db
       .prepare('SELECT * FROM media_assets WHERE id = ?')
       .get(proj.media_id as string) as Record<string, unknown> | undefined;
@@ -1245,7 +1891,7 @@ async function startServer() {
   });
 
   // Real FFmpeg MP4 Export
-  app.post('/api/exports', (req, res) => {
+  app.post('/api/exports', async (req, res) => {
     const { projectId, state, resolution = '720p', quality = 'balanced' } = req.body as {
       projectId?: string;
       state?: ProjectState;
@@ -1261,6 +1907,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const media = db
@@ -1283,18 +1934,50 @@ async function startServer() {
        VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)`,
     ).run(jobId, projectId, media.id, resolution, quality, now);
 
-    // Kick off FFmpeg background render without blocking HTTP response
-    void runExportJob({
-      jobId,
-      projectId,
-      mediaId: media.id as string,
-      sourceFilePath: media.file_path as string,
-      sourceHasAudio: Boolean(media.has_audio),
-      selectedAudioStream: mediaAnalysis?.selectedAudioStream ?? 0,
-      state: activeState,
-      resolution,
-      quality,
-    });
+    const mediaBlobUrl = (media.blob_url as string | undefined) || undefined;
+    let dispatchedRemotely = false;
+    if (isRemoteWorkerConfigured() && mediaBlobUrl) {
+      try {
+        await dispatchExportToWorker({
+          jobId,
+          projectId,
+          mediaId: media.id as string,
+          sourceBlobUrl: mediaBlobUrl,
+          sourceHasAudio: Boolean(media.has_audio),
+          selectedAudioStream: mediaAnalysis?.selectedAudioStream ?? 0,
+          state: activeState,
+          resolution,
+          quality,
+          customMusicBlobUrl: activeState.audio.customMusicUrl?.startsWith('https://')
+            ? activeState.audio.customMusicUrl
+            : undefined,
+          callbackUrl: cfg.workerCallbackBaseUrl
+            ? `${cfg.workerCallbackBaseUrl}/api/internal/worker-callback`
+            : undefined,
+        });
+        dispatchedRemotely = true;
+      } catch (dispatchErr) {
+        console.warn(
+          '[workerBridge] Remote export dispatch failed, running FFmpeg locally:',
+          dispatchErr instanceof Error ? dispatchErr.message : dispatchErr,
+        );
+      }
+    }
+
+    if (!dispatchedRemotely) {
+      // Kick off FFmpeg background render without blocking HTTP response
+      void runExportJob({
+        jobId,
+        projectId,
+        mediaId: media.id as string,
+        sourceFilePath: media.file_path as string,
+        sourceHasAudio: Boolean(media.has_audio),
+        selectedAudioStream: mediaAnalysis?.selectedAudioStream ?? 0,
+        state: activeState,
+        resolution,
+        quality,
+      });
+    }
 
     res.json({
       job: {
@@ -1317,6 +2000,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const format = String(req.query.format || 'srt').toLowerCase() === 'vtt' ? 'vtt' : 'srt';
@@ -1350,11 +2038,16 @@ async function startServer() {
 
   // Project-specific custom vocabulary dictionary
   app.get('/api/projects/:id/vocabulary', (req, res) => {
-    const proj = db.prepare('SELECT vocabulary_json, media_id FROM projects WHERE id = ?').get(req.params.id) as
-      | { vocabulary_json?: string; media_id: string }
+    const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
       | undefined;
     if (!proj) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const vocab = parseVocabularyInput(proj.vocabulary_json);
@@ -1367,6 +2060,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this project.' });
       return;
     }
     const vocab = parseVocabularyInput((req.body || {}).vocabulary);
@@ -1405,6 +2103,11 @@ async function startServer() {
         res.status(404).json({ error: 'Project not found.' });
         return;
       }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
+        return;
+      }
       const { wordId, newWord } = (req.body || {}) as { wordId?: string; newWord?: string };
       if (!wordId || !newWord || !newWord.trim()) {
         res.status(400).json({ error: 'wordId and non-empty newWord are required.' });
@@ -1439,6 +2142,11 @@ async function startServer() {
         | undefined;
       if (!proj) {
         res.status(404).json({ error: 'Project not found.' });
+        return;
+      }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
         return;
       }
       const mediaRow = db
@@ -1515,6 +2223,11 @@ async function startServer() {
         res.status(404).json({ error: 'Project not found.' });
         return;
       }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
+        return;
+      }
       const { targetLanguage } = (req.body || {}) as { targetLanguage?: string };
       if (!targetLanguage || !targetLanguage.trim()) {
         res.status(400).json({ error: 'targetLanguage is required.' });
@@ -1548,6 +2261,11 @@ async function startServer() {
         res.status(404).json({ error: 'Project not found.' });
         return;
       }
+      const ctx = getAuthContext(req);
+      if (!canAccessOwnedRecord(ctx, proj)) {
+        res.status(403).json({ error: 'Access denied to this project.' });
+        return;
+      }
       const media = db
         .prepare('SELECT * FROM media_assets WHERE id = ?')
         .get(proj.media_id as string) as Record<string, unknown> | undefined;
@@ -1574,20 +2292,23 @@ async function startServer() {
   const registerV1Job = (
     jobId: string,
     kind: 'ingest' | 'import_url' | 'retranscribe' | 'export',
-    underlyingId: string,
-    underlyingTable: 'analysis_jobs' | 'url_imports' | 'exports',
+    targetId: string,
+    projectId: string | null,
+    mediaId: string | null,
   ) => {
     db.prepare(
-      `INSERT OR REPLACE INTO v1_jobs (id, kind, underlying_id, underlying_table, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(jobId, kind, underlyingId, underlyingTable, new Date().toISOString());
+      `INSERT OR REPLACE INTO v1_jobs (job_id, kind, target_id, project_id, media_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(jobId, kind, targetId, projectId, mediaId, new Date().toISOString());
   };
 
   const checkIdempotency = (req: Request, res: Response, endpoint: string): string | null => {
     const key = req.header('Idempotency-Key')?.trim();
     if (!key) return null;
     const row = db
-      .prepare('SELECT status_code, response_json FROM idempotency_keys WHERE key = ? AND method = ? AND path = ?')
+      .prepare(
+        'SELECT status_code, response_json FROM idempotency_keys WHERE idempotency_key = ? AND method = ? AND path = ?',
+      )
       .get(key, req.method, endpoint) as { status_code: number; response_json: string } | undefined;
     if (row) {
       res.status(row.status_code).json(JSON.parse(row.response_json));
@@ -1596,10 +2317,16 @@ async function startServer() {
     return key;
   };
 
-  const saveIdempotency = (key: string | null, method: string, endpoint: string, statusCode: number, body: unknown) => {
+  const saveIdempotency = (
+    key: string | null,
+    method: string,
+    endpoint: string,
+    statusCode: number,
+    body: unknown,
+  ) => {
     if (!key || key === '__HIT__') return;
     db.prepare(
-      `INSERT OR IGNORE INTO idempotency_keys (key, method, path, status_code, response_json, created_at)
+      `INSERT OR IGNORE INTO idempotency_keys (idempotency_key, method, path, status_code, response_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     ).run(key, method, endpoint, statusCode, JSON.stringify(body), new Date().toISOString());
   };
@@ -1620,62 +2347,31 @@ async function startServer() {
       const languageOverride = (req.body.languageOverride as string | undefined)?.trim() || undefined;
       const vocabulary = parseVocabularyInput(req.body.vocabulary);
       const ctx = getAuthContext(req);
-      const mediaId = `med-${uuid()}`;
       const mimeType = file.mimetype && file.mimetype !== 'application/octet-stream' ? file.mimetype : 'video/mp4';
 
-      const { analysis, thumbnailUrl } = await prepareFastMediaRecord({
-        mediaId,
+      const result = await createIngestedMediaAndProject({
         filePath: file.path,
-        filename: file.originalname,
-        audioStreamIndex,
-      });
-      analysis.vocabulary = vocabulary;
-      analysis.selectedLanguageOverride = languageOverride || 'auto';
-
-      const now = new Date().toISOString();
-      db.prepare(
-        `INSERT INTO media_assets
-         (id, user_id, guest_token, source_type, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, language_override, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        mediaId, ctx.userId, ctx.guestToken, sourceType, file.originalname, mimeType, file.path,
-        thumbnailUrl || '/api/demos/demo-keynote/thumb', analysis.durationSec, analysis.width, analysis.height,
-        analysis.hasAudio ? 1 : 0, analysis.analysisMode, JSON.stringify(analysis), JSON.stringify(vocabulary),
-        languageOverride || null, now,
-      );
-
-      const projectId = `prj-${uuid()}`;
-      const initialState = createInitialProjectState(analysis);
-      const versions = generateThreeVersions(analysis);
-      const initialHistory: HistoryEntry[] = [
-        { id: uuid(), timestamp: now, label: 'Project Created', durationAfter: initialState.duration, stateSnapshot: initialState },
-      ];
-      db.prepare(
-        `INSERT INTO projects
-         (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-      ).run(
-        projectId, ctx.userId, ctx.guestToken, title, mediaId, thumbnailUrl, JSON.stringify(initialState),
-        JSON.stringify(initialHistory), JSON.stringify(versions), JSON.stringify(vocabulary), now, now,
-      );
-
-      const { job } = startBackgroundAnalysisJob({
-        mediaId,
-        projectId,
+        originalFilename: file.originalname,
+        mimeType,
+        sourceType,
+        title,
         audioStreamIndex,
         languageOverride,
         vocabulary,
+        ctx,
+        waitForSync: false,
       });
-      registerV1Job(job.id, 'ingest', job.id, 'analysis_jobs');
+
+      registerV1Job(result.job.id, 'ingest', result.job.id, result.projectId, result.mediaId);
       const payload = {
-        job_id: job.id,
-        media_id: mediaId,
-        project_id: projectId,
+        job_id: result.job.id,
+        media_id: result.mediaId,
+        project_id: result.projectId,
         status: 'queued',
         links: {
-          job: `/api/v1/jobs/${job.id}`,
-          project: `/api/projects/${projectId}`,
-          stream: `/api/media/${mediaId}/stream`,
+          job: `/api/v1/jobs/${result.job.id}`,
+          project: `/api/projects/${result.projectId}`,
+          stream: `/api/media/${result.mediaId}/stream`,
         },
       };
       saveIdempotency(idem, 'POST', '/api/v1/media/ingest', 202, payload);
@@ -1713,7 +2409,7 @@ async function startServer() {
       sendV1Error(res, 400, 'URL_VALIDATION_FAILED', latest.error || 'URL rejected.', false, { import_id: latest.id });
       return;
     }
-    registerV1Job(latest.id, 'import_url', latest.id, 'url_imports');
+    registerV1Job(latest.id, 'import_url', latest.id, latest.projectId || null, latest.mediaId || null);
     const payload = {
       job_id: latest.id,
       import_id: latest.id,
@@ -1736,6 +2432,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       sendV1Error(res, 404, 'PROJECT_NOT_FOUND', 'Project not found.', false);
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this project.', false);
       return;
     }
     const mediaRow = db.prepare('SELECT * FROM media_assets WHERE id = ?').get(proj.media_id as string) as
@@ -1762,7 +2463,7 @@ async function startServer() {
       languageOverride: languageOverride?.trim() || undefined,
       vocabulary: resolvedVocab,
     });
-    registerV1Job(job.id, 'retranscribe', job.id, 'analysis_jobs');
+    registerV1Job(job.id, 'retranscribe', job.id, proj.id as string, mediaRow.id as string);
     const payload = {
       job_id: job.id,
       project_id: proj.id,
@@ -1782,6 +2483,11 @@ async function startServer() {
       | undefined;
     if (!proj) {
       sendV1Error(res, 404, 'PROJECT_NOT_FOUND', 'Project not found.', false);
+      return;
+    }
+    const ctx = getAuthContext(req);
+    if (!canAccessOwnedRecord(ctx, proj)) {
+      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this project.', false);
       return;
     }
     const media = db.prepare('SELECT * FROM media_assets WHERE id = ?').get(proj.media_id as string) as
@@ -1816,7 +2522,7 @@ async function startServer() {
       resolution,
       quality,
     });
-    registerV1Job(jobId, 'export', jobId, 'exports');
+    registerV1Job(jobId, 'export', jobId, proj.id as string, media.id as string);
     const payload = {
       job_id: jobId,
       project_id: proj.id,
@@ -1829,12 +2535,20 @@ async function startServer() {
 
   app.get('/api/v1/jobs/:job_id', (req, res) => {
     const jobId = req.params.job_id;
-    const reg = db.prepare('SELECT * FROM v1_jobs WHERE id = ?').get(jobId) as
-      | { id: string; kind: string; underlying_id: string; underlying_table: string }
+    const reg = db.prepare('SELECT * FROM v1_jobs WHERE job_id = ?').get(jobId) as
+      | { job_id: string; kind: string; target_id: string; project_id: string | null; media_id: string | null }
       | undefined;
+    const ctx = getAuthContext(req);
 
-    if (reg?.underlying_table === 'url_imports' || jobId.startsWith('imp-')) {
-      const imp = getUrlImportJob(reg?.underlying_id || jobId);
+    if (reg?.kind === 'import_url' || jobId.startsWith('impurl-')) {
+      const impRow = db.prepare('SELECT user_id, guest_token FROM url_imports WHERE id = ?').get(reg?.target_id || jobId) as
+        | Record<string, unknown>
+        | undefined;
+      if (impRow && !canAccessOwnedRecord(ctx, impRow)) {
+        sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this job.', false);
+        return;
+      }
+      const imp = getUrlImportJob(reg?.target_id || jobId);
       if (!imp) {
         sendV1Error(res, 404, 'JOB_NOT_FOUND', 'URL import job not found.', false);
         return;
@@ -1860,12 +2574,19 @@ async function startServer() {
       return;
     }
 
-    if (reg?.underlying_table === 'exports' || jobId.startsWith('exp-')) {
-      const exp = db.prepare('SELECT * FROM exports WHERE id = ?').get(reg?.underlying_id || jobId) as
+    if (reg?.kind === 'export' || jobId.startsWith('exp-')) {
+      const exp = db.prepare('SELECT * FROM exports WHERE id = ?').get(reg?.target_id || jobId) as
         | Record<string, unknown>
         | undefined;
       if (!exp) {
         sendV1Error(res, 404, 'JOB_NOT_FOUND', 'Export job not found.', false);
+        return;
+      }
+      const proj = db.prepare('SELECT user_id, guest_token, source_type FROM projects p LEFT JOIN media_assets m ON p.media_id = m.id WHERE p.id = ?').get(exp.project_id as string) as
+        | Record<string, unknown>
+        | undefined;
+      if (proj && !canAccessOwnedRecord(ctx, proj)) {
+        sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this export job.', false);
         return;
       }
       res.json({
@@ -1883,15 +2604,23 @@ async function startServer() {
         result_links: {
           download: exp.output_url ? `${exp.output_url as string}?dl=1` : null,
           stream: exp.output_url || null,
+          blob_url: (exp.blob_url as string | undefined) || null,
         },
         error: exp.error ? { code: 'EXPORT_FAILED', message: exp.error, retryable: true } : null,
       });
       return;
     }
 
-    const analysisJob = getAnalysisJob(reg?.underlying_id || jobId);
+    const analysisJob = getAnalysisJob(reg?.target_id || jobId);
     if (!analysisJob) {
       sendV1Error(res, 404, 'JOB_NOT_FOUND', 'Job not found.', false);
+      return;
+    }
+    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(analysisJob.mediaId) as
+      | Record<string, unknown>
+      | undefined;
+    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
+      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this job.', false);
       return;
     }
     res.json({
@@ -1916,12 +2645,424 @@ async function startServer() {
     });
   });
 
+  // =========================================================================
+  // Separate Background Worker Routes (for Google Cloud Run WORKER_MODE=1)
+  // + Signed Internal Callbacks back to the Control Plane
+  // =========================================================================
+  app.get('/worker/health', (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized worker request.' });
+      return;
+    }
+    res.json({
+      ok: true,
+      workerMode: cfg.workerMode,
+      geminiConfigured: hasGeminiKey(),
+      blobConfigured: isVercelBlobConfigured(),
+      ffmpegReady: true,
+    });
+  });
+
+  app.post('/worker/jobs/analyze', async (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized worker request.' });
+      return;
+    }
+    const {
+      jobId,
+      mediaId,
+      projectId,
+      sourceBlobUrl,
+      filename,
+      audioStreamIndex = 0,
+      languageOverride,
+      vocabulary = [],
+      callbackUrl,
+    } = (req.body || {}) as {
+      jobId?: string;
+      mediaId?: string;
+      projectId?: string | null;
+      sourceBlobUrl?: string;
+      filename?: string;
+      audioStreamIndex?: number;
+      languageOverride?: string;
+      vocabulary?: string[];
+      callbackUrl?: string;
+    };
+    if (!jobId || !mediaId || !sourceBlobUrl || !filename) {
+      res.status(400).json({ error: 'jobId, mediaId, sourceBlobUrl, and filename are required.' });
+      return;
+    }
+
+    res.status(202).json({ accepted: true, jobId });
+
+    void (async () => {
+      const ext = path.extname(filename) || '.mp4';
+      const localPath = path.join(UPLOADS_DIR, `${uuid()}${ext}`);
+      try {
+        await downloadBlobToFile(sourceBlobUrl, localPath);
+        const { analysis, thumbnailUrl } = await prepareFastMediaRecord({
+          mediaId,
+          filePath: localPath,
+          filename,
+          audioStreamIndex,
+        });
+        const now = new Date().toISOString();
+        db.prepare(
+          `INSERT OR IGNORE INTO media_assets
+           (id, user_id, guest_token, source_type, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, language_override, blob_url, created_at)
+           VALUES (?, NULL, 'worker', 'upload', ?, 'video/mp4', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          mediaId,
+          filename,
+          localPath,
+          thumbnailUrl || '/api/demos/demo-keynote/thumb',
+          analysis.durationSec,
+          analysis.width,
+          analysis.height,
+          analysis.hasAudio ? 1 : 0,
+          analysis.analysisMode,
+          JSON.stringify(analysis),
+          JSON.stringify(vocabulary),
+          languageOverride || null,
+          sourceBlobUrl,
+          now,
+        );
+        db.prepare(
+          `INSERT OR IGNORE INTO analysis_jobs
+           (id, media_id, project_id, selected_audio_stream, language_override, status, overall_progress, audio_extraction_status, transcription_status, chunk_total, chunk_completed, chunk_failed, alignment_status, caption_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'queued', 10, 'pending', 'pending', 0, 0, 0, 'pending', 'pending', ?, ?)`,
+        ).run(jobId, mediaId, projectId ?? null, audioStreamIndex, languageOverride || 'auto', now, now);
+
+        const finalAnalysis = await executeAnalysisJob(jobId, {
+          audioStreamIndex,
+          languageOverride,
+          vocabulary,
+        });
+
+        let thumbBlobUrl: string | undefined;
+        const thumbPath = path.join(THUMBS_DIR, `${mediaId}.jpg`);
+        if (isVercelBlobConfigured() && fs.existsSync(thumbPath)) {
+          const uploadedThumb = await uploadFileToBlob({
+            localPath: thumbPath,
+            blobPathname: `thumbs/${mediaId}.jpg`,
+            contentType: 'image/jpeg',
+          }).catch(() => null);
+          thumbBlobUrl = uploadedThumb?.url;
+        }
+
+        if (callbackUrl) {
+          await sendWorkerCallback(callbackUrl, {
+            type: 'analysis_progress',
+            jobId,
+            mediaId,
+            projectId: projectId ?? null,
+            status: finalAnalysis.transcriptionStatus || 'complete',
+            progress: 100,
+            analysis: finalAnalysis,
+            thumbnailBlobUrl: thumbBlobUrl,
+          });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Worker analysis error';
+        updateAnalysisJobRow(jobId, { status: 'failed', transcriptionStatus: 'failed', error: msg });
+        if (callbackUrl) {
+          await sendWorkerCallback(callbackUrl, {
+            type: 'analysis_progress',
+            jobId,
+            mediaId,
+            projectId: projectId ?? null,
+            status: 'failed',
+            progress: 0,
+            error: msg,
+          });
+        }
+      } finally {
+        if (fs.existsSync(localPath)) {
+          fs.rmSync(localPath, { force: true });
+        }
+      }
+    })();
+  });
+
+  app.post('/worker/jobs/import-url', (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized worker request.' });
+      return;
+    }
+    const { url, title, userId = null, guestToken = null, languageOverride, vocabulary, callbackUrl } = (req.body || {}) as {
+      url?: string;
+      title?: string;
+      userId?: string | null;
+      guestToken?: string | null;
+      languageOverride?: string;
+      vocabulary?: string[];
+      callbackUrl?: string;
+    };
+    if (!url) {
+      res.status(400).json({ error: 'url is required.' });
+      return;
+    }
+    const { importJob, promise } = startUrlImportJob({
+      url,
+      title,
+      userId,
+      guestToken,
+      languageOverride,
+      vocabulary,
+    });
+    res.status(202).json({ accepted: true, importId: importJob.id });
+
+    void promise
+      .then(async (done) => {
+        if (!callbackUrl) return;
+        const mediaRow = done.mediaId
+          ? (db.prepare('SELECT blob_url, thumbnail_url, analysis_json FROM media_assets WHERE id = ?').get(done.mediaId) as
+              | { blob_url?: string; thumbnail_url?: string; analysis_json?: string }
+              | undefined)
+          : undefined;
+        await sendWorkerCallback(callbackUrl, {
+          type: 'url_import_progress',
+          importId: done.id,
+          status: done.status,
+          progress: done.progress,
+          bytesDownloaded: done.bytesDownloaded,
+          totalBytes: done.totalBytes,
+          mediaId: done.mediaId,
+          projectId: done.projectId,
+          analysisJobId: done.analysisJobId,
+          sourceBlobUrl: mediaRow?.blob_url,
+          thumbnailBlobUrl: mediaRow?.thumbnail_url,
+          analysis: mediaRow?.analysis_json ? (JSON.parse(mediaRow.analysis_json) as MediaAnalysis) : undefined,
+        });
+      })
+      .catch(async (err) => {
+        if (callbackUrl) {
+          await sendWorkerCallback(callbackUrl, {
+            type: 'url_import_progress',
+            importId: importJob.id,
+            status: 'failed',
+            progress: 0,
+            error: err instanceof Error ? err.message : 'Worker URL import failed',
+          });
+        }
+      });
+  });
+
+  app.post('/worker/jobs/export', async (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized worker request.' });
+      return;
+    }
+    const {
+      jobId,
+      projectId,
+      mediaId,
+      sourceBlobUrl,
+      sourceHasAudio = true,
+      selectedAudioStream = 0,
+      state,
+      resolution = '720p',
+      quality = 'balanced',
+      customMusicBlobUrl,
+      callbackUrl,
+    } = (req.body || {}) as {
+      jobId?: string;
+      projectId?: string;
+      mediaId?: string;
+      sourceBlobUrl?: string;
+      sourceHasAudio?: boolean;
+      selectedAudioStream?: number;
+      state?: ProjectState;
+      resolution?: ExportJob['resolution'];
+      quality?: ExportJob['quality'];
+      customMusicBlobUrl?: string;
+      callbackUrl?: string;
+    };
+    if (!jobId || !projectId || !mediaId || !sourceBlobUrl || !state) {
+      res.status(400).json({ error: 'jobId, projectId, mediaId, sourceBlobUrl, and state are required.' });
+      return;
+    }
+
+    res.status(202).json({ accepted: true, jobId });
+
+    void (async () => {
+      const localPath = path.join(UPLOADS_DIR, `${uuid()}.mp4`);
+      try {
+        await downloadBlobToFile(sourceBlobUrl, localPath);
+        const now = new Date().toISOString();
+        db.prepare(
+          `INSERT OR IGNORE INTO exports (id, project_id, media_id, status, progress, resolution, quality, created_at)
+           VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)`,
+        ).run(jobId, projectId, mediaId, resolution, quality, now);
+
+        const patchedState: ProjectState = customMusicBlobUrl
+          ? { ...state, audio: { ...state.audio, customMusicUrl: customMusicBlobUrl } }
+          : state;
+
+        await runExportJob({
+          jobId,
+          projectId,
+          mediaId,
+          sourceFilePath: localPath,
+          sourceHasAudio,
+          selectedAudioStream,
+          state: patchedState,
+          resolution,
+          quality,
+        });
+
+        const expRow = db.prepare('SELECT * FROM exports WHERE id = ?').get(jobId) as Record<string, unknown> | undefined;
+        if (callbackUrl && expRow) {
+          await sendWorkerCallback(callbackUrl, {
+            type: 'export_progress',
+            jobId,
+            status: expRow.status as string,
+            progress: Number(expRow.progress ?? 0),
+            outputUrl: (expRow.output_url as string | undefined) || undefined,
+            blobUrl: (expRow.blob_url as string | undefined) || undefined,
+            fileSizeBytes: expRow.file_size_bytes ? Number(expRow.file_size_bytes) : undefined,
+            durationSec: expRow.duration_sec ? Number(expRow.duration_sec) : undefined,
+            error: (expRow.error as string | undefined) || undefined,
+          });
+        }
+      } catch (err) {
+        if (callbackUrl) {
+          await sendWorkerCallback(callbackUrl, {
+            type: 'export_progress',
+            jobId,
+            status: 'failed',
+            progress: 0,
+            error: err instanceof Error ? err.message : 'Worker export error',
+          });
+        }
+      } finally {
+        if (fs.existsSync(localPath)) {
+          fs.rmSync(localPath, { force: true });
+        }
+      }
+    })();
+  });
+
+  app.get('/worker/jobs/:jobId', (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized worker request.' });
+      return;
+    }
+    const analysisJob = getAnalysisJob(req.params.jobId);
+    if (analysisJob) {
+      res.json({ kind: 'analysis', job: analysisJob });
+      return;
+    }
+    const exp = db.prepare('SELECT * FROM exports WHERE id = ?').get(req.params.jobId) as Record<string, unknown> | undefined;
+    if (exp) {
+      res.json({ kind: 'export', job: exp });
+      return;
+    }
+    res.status(404).json({ error: 'Worker job not found.' });
+  });
+
+  app.post('/api/internal/worker-callback', (req, res) => {
+    if (!isAuthorizedWorkerRequest(req.headers.authorization, req.headers['x-worker-secret'] as string | undefined)) {
+      res.status(401).json({ error: 'Unauthorized callback.' });
+      return;
+    }
+    const event = (req.body || {}) as {
+      type?: string;
+      jobId?: string;
+      mediaId?: string;
+      projectId?: string | null;
+      status?: string;
+      progress?: number;
+      analysis?: MediaAnalysis;
+      thumbnailBlobUrl?: string;
+      outputUrl?: string;
+      blobUrl?: string;
+      fileSizeBytes?: number;
+      durationSec?: number;
+      error?: string;
+    };
+
+    if (event.type === 'analysis_progress' && event.jobId) {
+      updateAnalysisJobRow(event.jobId, {
+        status: event.status as never,
+        overallProgress: event.progress,
+        error: event.error,
+        transcriptionStatus: event.status === 'failed' ? 'failed' : event.progress === 100 ? 'completed' : 'running',
+        captionStatus: event.progress === 100 ? 'completed' : undefined,
+      });
+      if (event.analysis && event.mediaId) {
+        db.prepare('UPDATE media_assets SET analysis_mode = ?, analysis_json = ?, thumbnail_url = COALESCE(?, thumbnail_url) WHERE id = ?').run(
+          event.analysis.analysisMode,
+          JSON.stringify(event.analysis),
+          event.thumbnailBlobUrl || null,
+          event.mediaId,
+        );
+        if (event.projectId) {
+          const proj = db.prepare('SELECT state_json FROM projects WHERE id = ?').get(event.projectId) as
+            | { state_json: string }
+            | undefined;
+          if (proj) {
+            const cur = JSON.parse(proj.state_json) as ProjectState;
+            const fresh = createInitialProjectState(event.analysis);
+            const nextState: ProjectState = {
+              ...fresh,
+              audio: cur.audio,
+              overlays: cur.overlays,
+              trackVisibility: cur.trackVisibility,
+              trackLocks: cur.trackLocks,
+            };
+            db.prepare('UPDATE projects SET state_json = ?, versions_json = ?, thumbnail_url = COALESCE(?, thumbnail_url), updated_at = ? WHERE id = ?').run(
+              JSON.stringify(nextState),
+              JSON.stringify(generateThreeVersions(event.analysis)),
+              event.thumbnailBlobUrl || null,
+              new Date().toISOString(),
+              event.projectId,
+            );
+          }
+        }
+      }
+      res.json({ ok: true });
+      return;
+    }
+
+    if (event.type === 'export_progress' && event.jobId) {
+      const cur = db.prepare('SELECT * FROM exports WHERE id = ?').get(event.jobId) as Record<string, unknown> | undefined;
+      if (cur) {
+        db.prepare(
+          `UPDATE exports SET status = ?, progress = ?, output_url = ?, blob_url = ?, file_size_bytes = ?, duration_sec = ?, error = ? WHERE id = ?`,
+        ).run(
+          event.status ?? cur.status,
+          event.progress ?? cur.progress,
+          event.outputUrl ?? cur.output_url ?? `/api/exports/${event.jobId}/download`,
+          event.blobUrl ?? cur.blob_url,
+          event.fileSizeBytes ?? cur.file_size_bytes,
+          event.durationSec ?? cur.duration_sec,
+          event.error ?? cur.error,
+          event.jobId,
+        );
+      }
+      res.json({ ok: true });
+      return;
+    }
+
+    res.json({ ok: true });
+  });
+
   app.get('/api/exports/:id', (req, res) => {
     const row = db.prepare('SELECT * FROM exports WHERE id = ?').get(req.params.id) as
       | Record<string, unknown>
       | undefined;
     if (!row) {
       res.status(404).json({ error: 'Export job not found.' });
+      return;
+    }
+    const proj = db.prepare('SELECT user_id, guest_token FROM projects WHERE id = ?').get(row.project_id as string) as
+      | Record<string, unknown>
+      | undefined;
+    const ctx = getAuthContext(req);
+    if (proj && !canAccessOwnedRecord(ctx, proj)) {
+      res.status(403).json({ error: 'Access denied to this export job.' });
       return;
     }
     res.json({
@@ -1934,6 +3075,7 @@ async function startServer() {
         resolution: row.resolution,
         quality: row.quality,
         outputUrl: row.output_url,
+        blobUrl: row.blob_url,
         fileSizeBytes: row.file_size_bytes,
         durationSec: row.duration_sec,
         error: row.error,
@@ -1943,10 +3085,18 @@ async function startServer() {
   });
 
   app.get('/api/exports/:id/download', (req, res) => {
-    const row = db.prepare('SELECT output_path, status FROM exports WHERE id = ?').get(req.params.id) as
-      | { output_path?: string; status: string }
+    const row = db.prepare('SELECT output_path, blob_url, status FROM exports WHERE id = ?').get(req.params.id) as
+      | { output_path?: string; blob_url?: string; status: string }
       | undefined;
-    if (!row || !row.output_path || !fs.existsSync(row.output_path)) {
+    if (!row) {
+      res.status(404).json({ error: 'Exported video not found.' });
+      return;
+    }
+    if ((!row.output_path || !fs.existsSync(row.output_path)) && row.blob_url) {
+      res.redirect(302, row.blob_url);
+      return;
+    }
+    if (!row.output_path || !fs.existsSync(row.output_path)) {
       res.status(404).json({ error: 'Exported video not found.' });
       return;
     }

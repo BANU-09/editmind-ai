@@ -31,8 +31,10 @@ import {
   extractAudioSnippetWav,
   translateProjectTranscript,
 } from './transcriber';
+import { assertTrustedVercelBlobUrl } from './blobStorage';
 import { getAppConfig, STRICT_MAX_UPLOAD_BYTES } from './config';
 import { validateSafePublicHttpUrl } from './urlImporter';
+import { isAuthorizedWorkerRequest } from './workerBridge';
 
 const execFileAsync = promisify(execFile);
 const TMP_DIR = path.resolve(process.cwd(), 'storage', '.test_media_tmp');
@@ -731,6 +733,24 @@ describe('EDITMIND AI — Chunked Transcription, Recovery, Word Editing & Multi-
       await assert.rejects(() => validateSafePublicHttpUrl('file:///etc/passwd'), /http/i);
     } finally {
       if (prevPrivate !== undefined) process.env.ALLOW_LOCALHOST_URL_IMPORT_FOR_TEST = prevPrivate;
+    }
+
+    // Verify Vercel Blob HTTPS + domain trust check
+    assert.ok(assertTrustedVercelBlobUrl('https://abc123.public.blob.vercel-storage.com/video.mp4'));
+    assert.throws(() => assertTrustedVercelBlobUrl('http://abc123.public.blob.vercel-storage.com/video.mp4'), /HTTPS/i);
+    assert.throws(() => assertTrustedVercelBlobUrl('https://evil.example.com/video.mp4'), /untrusted/i);
+
+    // Verify Worker shared-secret timing-safe check
+    const prevSecret = process.env.WORKER_SHARED_SECRET;
+    process.env.WORKER_SHARED_SECRET = 'super-secret-worker-key-123';
+    try {
+      assert.equal(isAuthorizedWorkerRequest('Bearer super-secret-worker-key-123', undefined), true);
+      assert.equal(isAuthorizedWorkerRequest(undefined, 'super-secret-worker-key-123'), true);
+      assert.equal(isAuthorizedWorkerRequest('Bearer wrong-key', undefined), false);
+      assert.equal(isAuthorizedWorkerRequest(undefined, undefined), false);
+    } finally {
+      if (prevSecret === undefined) delete process.env.WORKER_SHARED_SECRET;
+      else process.env.WORKER_SHARED_SECRET = prevSecret;
     }
   });
 
