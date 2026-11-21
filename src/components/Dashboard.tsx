@@ -23,6 +23,7 @@ import {
 import type { UserProfile } from '../shared/types';
 import { formatTimecode } from '../shared/timelineEngine';
 import { api, apiUrl, type DemoCatalogItem, type HydratedProject } from '../lib/api';
+import { FALLBACK_DEMOS } from '../lib/fallbackData';
 
 interface DashboardProps {
   user: UserProfile | null;
@@ -36,13 +37,15 @@ interface DashboardProps {
 
 export function Dashboard({
   user,
-  demos,
-  projects,
+  demos = [],
+  projects = [],
   onAuthChange,
   onRefreshProjects,
   onOpenProject,
   onBackHome,
 }: DashboardProps) {
+  const safeDemos = demos && demos.length > 0 ? demos : FALLBACK_DEMOS;
+  const safeProjects = projects || [];
   const [activeTab, setActiveTab] = useState<'projects' | 'upload' | 'record' | 'demos'>('projects');
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
   const [authEmail, setAuthEmail] = useState('');
@@ -484,10 +487,10 @@ export function Dashboard({
         <div className="flex items-center gap-1 border-b border-white/10 pb-2 overflow-x-auto">
           {(
             [
-              { id: 'projects', label: `Recent Projects (${projects.length})` },
+              { id: 'projects', label: `Recent Projects (${safeProjects.length})` },
               { id: 'upload', label: 'Upload Footage' },
               { id: 'record', label: 'Camera & Mic Studio' },
-              { id: 'demos', label: `Demo Videos (${demos.length})` },
+              { id: 'demos', label: `Demo Videos (${safeDemos.length})` },
             ] as const
           ).map((tab) => (
             <button
@@ -508,7 +511,7 @@ export function Dashboard({
         {/* Tab 1: Recent Projects */}
         {activeTab === 'projects' && (
           <section className="space-y-4">
-            {projects.length === 0 ? (
+            {safeProjects.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-white/15 bg-[#0B1022]/60 p-10 text-center space-y-4">
                 <Video className="w-10 h-10 text-cyan-400 mx-auto" />
                 <div className="space-y-1">
@@ -528,7 +531,7 @@ export function Dashboard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleOpenDemo(demos[0]?.id || 'demo-keynote')}
+                    onClick={() => void handleOpenDemo(safeDemos[0]?.id || 'demo-keynote')}
                     className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:border-cyan-400/50 cursor-pointer"
                   >
                     <Play className="w-4 h-4 text-cyan-400" />
@@ -538,7 +541,7 @@ export function Dashboard({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((proj) => (
+                {safeProjects.map((proj) => (
                   <div
                     key={proj.id}
                     className="rounded-2xl border border-white/10 bg-[#0B1022]/90 overflow-hidden flex flex-col justify-between"
@@ -1016,7 +1019,7 @@ export function Dashboard({
         {/* Tab 4: Demo Library */}
         {activeTab === 'demos' && (
           <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {demos.map((demo) => (
+            {safeDemos.map((demo) => (
               <div
                 key={demo.id}
                 className="rounded-2xl border border-white/10 bg-[#0B1022]/90 overflow-hidden flex flex-col justify-between"

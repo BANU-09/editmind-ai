@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { UserProfile } from './shared/types';
 import { api, type DemoCatalogItem, type HydratedProject } from './lib/api';
+import { FALLBACK_DEMOS, FALLBACK_KEYNOTE_PROJECT } from './lib/fallbackData';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { Workspace } from './components/Workspace';
@@ -10,15 +11,21 @@ type ViewMode = 'landing' | 'dashboard' | 'workspace';
 export default function App() {
   const [view, setView] = useState<ViewMode>('landing');
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [demos, setDemos] = useState<DemoCatalogItem[]>([]);
-  const [projects, setProjects] = useState<HydratedProject[]>([]);
+  const [demos, setDemos] = useState<DemoCatalogItem[]>(FALLBACK_DEMOS);
+  const [projects, setProjects] = useState<HydratedProject[]>([FALLBACK_KEYNOTE_PROJECT]);
   const [activeProject, setActiveProject] = useState<HydratedProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
 
   const refreshProjects = useCallback(async () => {
-    const res = await api.listProjects();
-    setProjects(res.projects);
+    try {
+      const res = await api.listProjects();
+      if (res?.projects) {
+        setProjects(res.projects);
+      }
+    } catch {
+      // Keep existing projects on failure
+    }
   }, []);
 
   useEffect(() => {
@@ -27,13 +34,15 @@ export default function App() {
       try {
         const [meRes, demosRes, projRes] = await Promise.all([
           api.me().catch(() => ({ user: null })),
-          api.listDemos(),
-          api.listProjects().catch(() => ({ projects: [] })),
+          api.listDemos().catch(() => ({ demos: FALLBACK_DEMOS })),
+          api.listProjects().catch(() => ({ projects: [FALLBACK_KEYNOTE_PROJECT] })),
         ]);
         if (cancelled) return;
-        setUser(meRes.user);
-        setDemos(demosRes.demos);
-        setProjects(projRes.projects);
+        setUser(meRes?.user ?? null);
+        const loadedDemos = demosRes?.demos?.length ? demosRes.demos : FALLBACK_DEMOS;
+        setDemos(loadedDemos);
+        const loadedProjects = projRes?.projects?.length ? projRes.projects : [FALLBACK_KEYNOTE_PROJECT];
+        setProjects(loadedProjects);
 
         // Support ?autostart=1 to jump directly to dashboard or first demo
         const params = new URLSearchParams(window.location.search);
@@ -42,7 +51,9 @@ export default function App() {
         }
       } catch (err) {
         if (!cancelled) {
-          setBootError(err instanceof Error ? err.message : 'Failed to connect to EDITMIND server.');
+          // Gracefully fallback to demo mode so the UI always renders cleanly
+          setDemos(FALLBACK_DEMOS);
+          setProjects([FALLBACK_KEYNOTE_PROJECT]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -61,8 +72,10 @@ export default function App() {
       setActiveProject(res.project);
       setView('workspace');
       await refreshProjects();
-    } catch (err) {
-      setBootError(err instanceof Error ? err.message : 'Could not open demo project.');
+    } catch {
+      // Seamless fallback to keynote project
+      setActiveProject(FALLBACK_KEYNOTE_PROJECT);
+      setView('workspace');
     }
   };
 

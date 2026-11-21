@@ -15,6 +15,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import type { DemoCatalogItem } from '../lib/api';
+import { FALLBACK_DEMOS } from '../lib/fallbackData';
 import { HeroOrbCanvas } from './HeroOrbCanvas';
 
 interface LandingPageProps {
@@ -107,15 +108,16 @@ const SEARCH_SAMPLE_HITS = [
   },
 ];
 
-export function LandingPage({ demos, onStartEditing, onTryDemo }: LandingPageProps) {
+export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPageProps) {
+  const safeDemos = demos && demos.length > 0 ? demos : FALLBACK_DEMOS;
   const [activePromptIdx, setActivePromptIdx] = useState(0);
   const [activeVersionIdx, setActiveVersionIdx] = useState(1);
   const [searchFilter, setSearchFilter] = useState('AI');
-  const [activeDemoId, setActiveDemoId] = useState<string>(demos[0]?.id || 'demo-keynote');
+  const [activeDemoId, setActiveDemoId] = useState<string>(safeDemos[0]?.id || 'demo-keynote');
 
   const currentPrompt = PROMPT_EXAMPLES[activePromptIdx];
   const currentVersion = VERSION_TABS[activeVersionIdx];
-  const selectedDemo = demos.find((d) => d.id === activeDemoId) || demos[0];
+  const selectedDemo = safeDemos.find((d) => d.id === activeDemoId) || safeDemos[0] || FALLBACK_DEMOS[0];
 
   return (
     <div className="min-h-screen bg-[#050711] text-slate-100 overflow-x-hidden">
@@ -384,7 +386,7 @@ export function LandingPage({ demos, onStartEditing, onTryDemo }: LandingPagePro
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => onTryDemo(demos[0]?.id)}
+                  onClick={() => onTryDemo(safeDemos[0]?.id)}
                   className="rounded-lg bg-amber-500/20 border border-amber-400/50 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/30 transition-colors cursor-pointer"
                 >
                   Inspect Protection in Studio
@@ -493,7 +495,7 @@ export function LandingPage({ demos, onStartEditing, onTryDemo }: LandingPagePro
             </div>
             <button
               type="button"
-              onClick={() => onTryDemo(demos[0]?.id)}
+              onClick={() => onTryDemo(safeDemos[0]?.id)}
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Open Full Workspace
@@ -536,7 +538,7 @@ export function LandingPage({ demos, onStartEditing, onTryDemo }: LandingPagePro
               </div>
               <button
                 type="button"
-                onClick={() => onTryDemo(selectedDemo?.id)}
+                onClick={() => onTryDemo(selectedDemo?.id || safeDemos[0]?.id)}
                 className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-violet-600 py-2 text-xs font-semibold text-white hover:brightness-110 cursor-pointer"
               >
                 Edit This Video Now
@@ -560,7 +562,7 @@ export function LandingPage({ demos, onStartEditing, onTryDemo }: LandingPagePro
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {demos.map((demo) => (
+          {safeDemos.map((demo) => (
             <div
               key={demo.id}
               className="rounded-2xl border border-white/10 bg-[#0B1022]/90 overflow-hidden flex flex-col justify-between"
