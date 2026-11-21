@@ -1,0 +1,6 @@
+{
+  "name": "EDITMIND AI",
+  "description": "AI-powered prompt-based video editing platform. Edit videos by meaning with semantic search, content protection, multi-version generation, and real FFmpeg export.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
