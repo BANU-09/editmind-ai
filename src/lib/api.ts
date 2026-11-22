@@ -30,10 +30,10 @@ const discoverWorker = !API_BASE_URL && import.meta.env.VITE_MEDIA_WORKER === '1
 let workerValidUntil = 0;
 let workerLookup: Promise<void> | undefined;
 
-async function connectWorker() {
-  if (!discoverWorker || Date.now() < workerValidUntil) return;
+export async function connectWorker(refresh = false) {
+  if (!discoverWorker || (!refresh && Date.now() < workerValidUntil)) return;
   workerLookup ??= (async () => {
-    const response = await fetch('/api/backend', { cache: 'no-store' });
+    const response = await fetch(refresh ? '/api/backend?refresh=1' : '/api/backend', { cache: 'no-store' });
     if (!response.ok) throw new Error('The media backend is starting or unavailable. Please try again.');
     const { origin } = await response.json();
     const url = new URL(origin);
@@ -145,7 +145,7 @@ class ApiError extends Error {
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   await connectWorker();
-  const res = await fetch(apiUrl(url), {
+  const send = () => fetch(apiUrl(url), {
     ...init,
     credentials: 'include',
     headers: buildHeaders({
@@ -153,6 +153,18 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers as Record<string, string> | undefined),
     }),
   });
+  const retryable=discoverWorker && ['GET','HEAD','PATCH','PUT'].includes((init.method||'GET').toUpperCase());
+  let res:Response;
+  try { res=await send(); }
+  catch(error) {
+    if(!retryable || init.signal?.aborted) throw error;
+    await connectWorker(true);
+    res=await send();
+  }
+  if(retryable && [502,503,504].includes(res.status)){
+    await connectWorker(true);
+    res=await send();
+  }
   const rawText = await res.text();
   let data: unknown = {};
   let parsedOk = Boolean(rawText.trim());

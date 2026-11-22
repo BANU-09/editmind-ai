@@ -18,7 +18,7 @@ import {
 } from '../shared/timelineEngine';
 import { ProceduralMusicBed, unlockAudioEngine } from '../lib/audioEngine';
 import { getNarrationPosition } from '../lib/fallbackData';
-import { apiUrl } from '../lib/api';
+import { apiUrl, connectWorker } from '../lib/api';
 import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
 
 interface VirtualVideoPlayerProps {
@@ -102,6 +102,14 @@ export function VirtualVideoPlayer({
     };
     img.src = resolvedPoster;
   }, [mediaUrl, posterUrl]);
+
+  const mediaReconnect = useRef('');
+  useEffect(() => {
+    mediaReconnect.current='';
+    if (!isPlaying || !mediaUrl.includes('.vercel.run/')) return;
+    const timer=window.setInterval(()=>{ void connectWorker(true).catch(()=>{}); }, 180_000);
+    return ()=>window.clearInterval(timer);
+  }, [isPlaying, mediaUrl]);
 
   const projectedCaptions = useMemo(() => projectCaptionsToTimeline(state), [state]);
   const activeCaption = useMemo(
@@ -440,9 +448,25 @@ export function VirtualVideoPlayer({
               poster={posterUrl}
               playsInline
               preload="auto"
-              onError={() => setVideoFailed(true)}
+              onError={async (e) => {
+                const node=e.currentTarget;
+                if (!mediaUrl.includes('.vercel.run/') || mediaReconnect.current===mediaUrl) {
+                  setVideoFailed(true);
+                  return;
+                }
+                mediaReconnect.current=mediaUrl;
+                try {
+                  await connectWorker(true);
+                  if(videoRef.current!==node) return;
+                  const old=new URL(mediaUrl);
+                  node.src=apiUrl(old.pathname+old.search);
+                  node.load();
+                } catch { if(videoRef.current===node) setVideoFailed(true); }
+              }}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
+                if (mapped && Math.abs(v.currentTime-mapped.sourceTime)>.03) v.currentTime=mapped.sourceTime;
+                if (isPlaying) void v.play().catch(()=>{});
                 if (v.videoWidth > 0 && v.videoHeight > 0) {
                   setNaturalDims({ w: v.videoWidth, h: v.videoHeight });
                 }

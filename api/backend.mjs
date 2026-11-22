@@ -23,6 +23,10 @@ async function startBackend() {
     persistent: true, keepLastSnapshots: { count: 1 },
     mounts: { '/mnt/editmind': drive }
   });
+  // Renew only when the running session is being used near its time limit.
+  if (sandbox.expiresAt && sandbox.expiresAt.getTime()-Date.now()<6*60_000) {
+    await sandbox.extendTimeout(8*60_000).catch(()=>{});
+  }
   const origin = sandbox.domain(3000);
   const old=await health(origin);
   if (old?.ok && old.mediaRevision!==build.revision) {
@@ -75,7 +79,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') return res.status(405).end();
   try {
-    if (!ready || Date.now() >= ready.until) {
+    if (req.query?.refresh === '1' || !ready || Date.now() >= ready.until) {
       pending ??= startBackend().finally(() => { pending = undefined; });
       const origin = await pending;
       ready = { origin, until: Date.now() + 15000 };

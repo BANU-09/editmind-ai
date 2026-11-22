@@ -116,9 +116,9 @@ export async function generate(system, input, stage) {
         ? {
             type: 'object',
             properties: {
-              keep: { type: 'array', maxItems: 12, items: { type: 'integer', minimum: 0, maximum: 69 } },
+              ids: { type: 'array', maxItems: 12, items: { type: 'integer', minimum: 0, maximum: 69 } },
             },
-            required: ['keep'],
+            required: ['ids'],
             additionalProperties: false,
           }
         : {
