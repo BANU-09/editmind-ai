@@ -13,6 +13,10 @@ async function connect() {
     persistent: true,
     keepLastSnapshots: { count: 1 },
   });
+  // Give an active inference enough time to finish at the session boundary.
+  if (worker.expiresAt && worker.expiresAt.getTime() - Date.now() < 5 * 60_000) {
+    await worker.extendTimeout(5 * 60_000).catch(() => {});
+  }
   async function ready() {
     const probe = await worker.runCommand('curl', [
       '-fsS',
@@ -95,6 +99,7 @@ export async function generate(system, input, stage) {
                 'question',
                 'condense',
                 'cut_passage',
+                'caption_color',
                 'edit',
                 'undo',
                 'redo',
@@ -175,7 +180,9 @@ export async function generate(system, input, stage) {
       '@' + path,
       'http://127.0.0.1:8090/v1/chat/completions',
     ]);
-    if (result.exitCode !== 0) throw new Error('The editing model timed out. Please retry.');
+    if (result.exitCode === 28) throw new Error('The editing model timed out. Please retry.');
+    if (result.exitCode !== 0) throw new Error('The private editing worker disconnected. Please retry.');
+
     const response = JSON.parse(await result.stdout());
     if (!response.choices?.[0]?.message?.content)
       throw new Error(response.error?.message || 'The editing model returned no answer.');

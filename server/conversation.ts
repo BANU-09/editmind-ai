@@ -22,6 +22,7 @@ lookup: locate/count mentions of a name, word or topic WITHOUT changing anything
 cut_occurrence: remove ONE specified occurrence of a spoken word/phrase. term = only the spoken words. ordinal = one-based occurrence, -1 for last, 0 if unspecified.
 pause_after_edit: trim ONE gap following an earlier edit. A positional reference to a pause refers to a single gap. Never choose remove_pauses for this.
 remove_pauses or remove_fillers: remove all unnecessary pauses or spoken fillers, respectively.
+caption_color: change the foreground color of subtitles. term = the CSS six-digit hex value of the requested color, such as #3366CC. Use edit for other caption operations or combinations.
 cut_passage: delete a named passage, opening, closing, repeated point or topical section from the footage. The excerpt selector finds its exact content.
 condense: create a shorter edited video file or a highlights cut. A request to explain or write a summary is a question. Use edit for exact time limits or explicit instructions on one passage.
 undo or redo: actively reverse or reinstate a change on explicit request. Recalling earlier instructions is a question. Never undo when a user asks what happened.
@@ -124,6 +125,13 @@ export async function converse(
     };
   }
   let direct;
+  if (route.tool === 'caption_color' && /^#[a-f0-9]{6}$/i.test(term)) {
+    direct = {
+      intent: 'edit',
+      reply: 'Set the caption text color to ' + term.toUpperCase() + '.',
+      actions: [{ kind: 'caption_color', color: term.toUpperCase() }],
+    };
+  }
   if (route.tool === 'condense' || route.tool === 'cut_passage') {
     const cutting = route.tool === 'cut_passage';
     const remaining = analysis.transcript.filter((t) =>
