@@ -47,6 +47,7 @@ import {
   trimSegment,
 } from '../shared/timelineEngine';
 import { api, apiUrl, type HydratedProject, type LanguageOption } from '../lib/api';
+import { downloadCaptionsFile } from '../lib/clientFallback';
 import { VirtualVideoPlayer } from './VirtualVideoPlayer';
 import { TimelinePanel } from './TimelinePanel';
 import {
@@ -1341,32 +1342,54 @@ function WorkspaceInner({
                   <div className="flex items-center gap-1.5 shrink-0">
                     {state.captions.length > 0 && (
                       <>
-                        <a
-                          href={apiUrl(
-                            `/api/projects/${project.id}/captions/export?format=srt${
-                              activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                            }`,
-                          )}
-                          download
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void downloadCaptionsFile(
+                              project.id,
+                              state,
+                              analysis,
+                              'srt',
+                              activeTranslationLang,
+                              apiUrl(
+                                `/api/projects/${project.id}/captions/export?format=srt${
+                                  activeTranslationLang
+                                    ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                                    : ''
+                                }`,
+                              ),
+                            )
+                          }
                           title="Download synchronized .SRT subtitles"
-                          className="inline-flex items-center gap-0.5 rounded border border-white/15 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300 hover:border-cyan-400"
+                          className="inline-flex items-center gap-0.5 rounded border border-white/15 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300 hover:border-cyan-400 cursor-pointer"
                         >
                           <Download className="w-2.5 h-2.5" />
                           SRT
-                        </a>
-                        <a
-                          href={apiUrl(
-                            `/api/projects/${project.id}/captions/export?format=vtt${
-                              activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                            }`,
-                          )}
-                          download
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void downloadCaptionsFile(
+                              project.id,
+                              state,
+                              analysis,
+                              'vtt',
+                              activeTranslationLang,
+                              apiUrl(
+                                `/api/projects/${project.id}/captions/export?format=vtt${
+                                  activeTranslationLang
+                                    ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                                    : ''
+                                }`,
+                              ),
+                            )
+                          }
                           title="Download synchronized .VTT subtitles"
-                          className="inline-flex items-center gap-0.5 rounded border border-white/15 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300 hover:border-violet-400"
+                          className="inline-flex items-center gap-0.5 rounded border border-white/15 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300 hover:border-violet-400 cursor-pointer"
                         >
                           <Download className="w-2.5 h-2.5" />
                           VTT
-                        </a>
+                        </button>
                       </>
                     )}
                     {selectedSpeaker && (
@@ -2626,6 +2649,7 @@ function WorkspaceInner({
           projectId={project.id}
           projectTitle={title}
           state={state}
+          analysis={analysis}
           sourceWidth={analysis.width}
           sourceHeight={analysis.height}
           activeTranslationLang={activeTranslationLang}

@@ -23,6 +23,7 @@ import {
 import type { UserProfile } from '../shared/types';
 import { formatTimecode } from '../shared/timelineEngine';
 import { api, apiUrl, type DemoCatalogItem, type HydratedProject } from '../lib/api';
+import { getBundledThumbForDemo } from '../lib/demoAssets';
 import { FALLBACK_DEMOS } from '../lib/fallbackData';
 
 interface DashboardProps {
@@ -579,7 +580,17 @@ export function Dashboard({
                     <div>
                       <div className="relative aspect-video bg-slate-950">
                         <img
-                          src={apiUrl(proj.thumbnailUrl || '/api/demos/demo-keynote/thumb')}
+                          src={
+                            proj.thumbnailUrl
+                              ? apiUrl(proj.thumbnailUrl)
+                              : getBundledThumbForDemo(proj.mediaId)
+                          }
+                          onError={(e) => {
+                            const fallbackSrc = getBundledThumbForDemo(proj.mediaId);
+                            if (e.currentTarget.src !== fallbackSrc) {
+                              e.currentTarget.src = fallbackSrc;
+                            }
+                          }}
                           alt={proj.title}
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
@@ -1057,7 +1068,13 @@ export function Dashboard({
                 <div>
                   <div className="relative aspect-video bg-slate-950">
                     <img
-                      src={apiUrl(demo.thumbnailUrl)}
+                      src={demo.thumbnailUrl ? apiUrl(demo.thumbnailUrl) : getBundledThumbForDemo(demo.id)}
+                      onError={(e) => {
+                        const fallbackSrc = getBundledThumbForDemo(demo.id);
+                        if (e.currentTarget.src !== fallbackSrc) {
+                          e.currentTarget.src = fallbackSrc;
+                        }
+                      }}
                       alt={demo.title}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"

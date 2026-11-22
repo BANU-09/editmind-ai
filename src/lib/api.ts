@@ -89,6 +89,41 @@ function buildHeaders(extra: Record<string, string> = {}): Record<string, string
   return headers;
 }
 
+import {
+  fallbackCorrectTranscriptWord,
+  fallbackCreateProjectFromDemo,
+  fallbackDeleteProject,
+  fallbackDuplicateProject,
+  fallbackGetExportStatus,
+  fallbackGetProject,
+  fallbackIngestLocalMedia,
+  fallbackListDemos,
+  fallbackListLanguages,
+  fallbackListProjects,
+  fallbackPlanAiEdit,
+  fallbackRegenerateVersions,
+  fallbackSearchProject,
+  fallbackStartExport,
+  fallbackTranslateProject,
+  fallbackUpdateProject,
+  fallbackUpdateVocabulary,
+  fallbackUploadMusic,
+} from './clientFallback';
+
+class ApiError extends Error {
+  status: number;
+  isJsonError: boolean;
+  isNonJson: boolean;
+
+  constructor(message: string, opts: { status: number; isJsonError?: boolean; isNonJson?: boolean }) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = opts.status;
+    this.isJsonError = Boolean(opts.isJsonError);
+    this.isNonJson = Boolean(opts.isNonJson);
+  }
+}
+
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(apiUrl(url), {
     ...init,
@@ -100,10 +135,11 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   });
   const rawText = await res.text();
   let data: unknown = {};
-  let parsedOk = true;
-  if (rawText) {
+  let parsedOk = Boolean(rawText.trim());
+  if (rawText.trim()) {
     try {
       data = JSON.parse(rawText);
+      parsedOk = true;
     } catch {
       parsedOk = false;
     }
@@ -111,10 +147,17 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     const errObj = parsedOk && data && typeof data === 'object' ? (data as { error?: string | { message?: string } }).error : undefined;
     const msg = typeof errObj === 'string' ? errObj : errObj?.message;
-    throw new Error(msg || `Request failed (${res.status})`);
+    throw new ApiError(msg || `Request failed (${res.status})`, {
+      status: res.status,
+      isJsonError: Boolean(parsedOk && msg),
+      isNonJson: !parsedOk,
+    });
   }
   if (!parsedOk) {
-    throw new Error(`Unexpected non-JSON response from ${url}`);
+    throw new ApiError(`Unexpected non-JSON response from ${url}`, {
+      status: res.status,
+      isNonJson: true,
+    });
   }
   return data as T;
 }
@@ -132,27 +175,72 @@ export interface HealthCapabilities {
   workerMode?: boolean;
 }
 
-let cachedHealth: { ts: number; data: HealthCapabilities } | null = null;
+let cachedHealth: { ts: number; data: HealthCapabilities | null } | null = null;
 
 async function getHealthCapabilities(): Promise<HealthCapabilities | null> {
-  if (cachedHealth && Date.now() - cachedHealth.ts < 30_000) {
+  if (cachedHealth && Date.now() - cachedHealth.ts < 20_000) {
     return cachedHealth.data;
   }
   try {
     const data = await requestJson<HealthCapabilities>('/api/health');
-    cachedHealth = { ts: Date.now(), data };
-    return data;
+    const valid = Boolean(data && typeof data === 'object' && data.ok === true);
+    cachedHealth = { ts: Date.now(), data: valid ? data : null };
+    return valid ? data : null;
   } catch {
+    cachedHealth = { ts: Date.now(), data: null };
     return null;
   }
 }
 
+async function isBackendOnline(): Promise<boolean> {
+  const health = await getHealthCapabilities();
+  return Boolean(health?.ok);
+}
+
+async function withStaticFallback<T>(
+  remoteCall: () => Promise<T>,
+  fallbackCall: () => Promise<T> | T,
+  forceFallback = false,
+): Promise<T> {
+  if (forceFallback) {
+    return await fallbackCall();
+  }
+  try {
+    return await remoteCall();
+  } catch (err) {
+    if (err instanceof ApiError && err.isJsonError) {
+      throw err;
+    }
+    const online = await isBackendOnline();
+    if (!online) {
+      return await fallbackCall();
+    }
+    throw err;
+  }
+}
+
+function isLocalFallbackId(id?: string | null): boolean {
+  return Boolean(id && (id.startsWith('proj-local-') || id.startsWith('exp-local-')));
+}
+
 export const api = {
-  health: () => requestJson<HealthCapabilities>('/api/health'),
+  health: () =>
+    withStaticFallback(
+      () => requestJson<HealthCapabilities>('/api/health'),
+      () => ({ ok: true, geminiConfigured: false, ffmpegReady: false }),
+    ),
 
-  listLanguages: () => requestJson<{ languages: LanguageOption[] }>('/api/languages'),
+  listLanguages: () =>
+    withStaticFallback(
+      () => requestJson<{ languages: LanguageOption[] }>('/api/languages'),
+      () => fallbackListLanguages(),
+    ),
 
-  me: () => requestJson<{ user: UserProfile | null }>('/api/auth/me'),
+  me: () =>
+    withStaticFallback(
+      () => requestJson<{ user: UserProfile | null }>('/api/auth/me'),
+      () => ({ user: null }),
+    ),
 
   signup: async (email: string, password: string, name: string) => {
     const res = await requestJson<{ token: string; user: UserProfile }>('/api/auth/signup', {
@@ -177,17 +265,48 @@ export const api = {
     setAuthToken(null);
   },
 
-  listDemos: () => requestJson<{ demos: DemoCatalogItem[] }>('/api/demos'),
+  listDemos: () =>
+    withStaticFallback(
+      async () => {
+        const res = await requestJson<{ demos: DemoCatalogItem[] }>('/api/demos');
+        if (!Array.isArray(res?.demos) || res.demos.length === 0) {
+          return fallbackListDemos();
+        }
+        return res;
+      },
+      () => fallbackListDemos(),
+    ),
 
-  listProjects: () => requestJson<{ projects: HydratedProject[] }>('/api/projects'),
+  listProjects: () =>
+    withStaticFallback(
+      async () => {
+        const remote = await requestJson<{ projects: HydratedProject[] }>('/api/projects');
+        const local = fallbackListProjects().projects;
+        if (local.length === 0) return remote;
+        const remoteIds = new Set(remote.projects.map((p) => p.id));
+        return {
+          projects: [...local.filter((p) => !remoteIds.has(p.id)), ...remote.projects],
+        };
+      },
+      () => fallbackListProjects(),
+    ),
 
-  getProject: (id: string) => requestJson<{ project: HydratedProject }>(`/api/projects/${id}`),
+  getProject: (id: string) =>
+    withStaticFallback(
+      () => requestJson<{ project: HydratedProject }>(`/api/projects/${id}`),
+      () => fallbackGetProject(id),
+      isLocalFallbackId(id),
+    ),
 
   createProjectFromDemo: (demoId: string, title?: string) =>
-    requestJson<{ project: HydratedProject }>('/api/projects/from-demo', {
-      method: 'POST',
-      body: JSON.stringify({ demoId, title }),
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ project: HydratedProject }>('/api/projects/from-demo', {
+          method: 'POST',
+          body: JSON.stringify({ demoId, title }),
+        }),
+      () => fallbackCreateProjectFromDemo(demoId, title),
+    ),
 
   updateProject: (
     id: string,
@@ -199,18 +318,32 @@ export const api = {
       versions?: EditVersion[];
     },
   ) =>
-    requestJson<{ project: HydratedProject }>(`/api/projects/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ project: HydratedProject }>(`/api/projects/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        }),
+      () => fallbackUpdateProject(id, payload),
+      isLocalFallbackId(id),
+    ),
 
   duplicateProject: (id: string) =>
-    requestJson<{ project: HydratedProject }>(`/api/projects/${id}/duplicate`, {
-      method: 'POST',
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ project: HydratedProject }>(`/api/projects/${id}/duplicate`, {
+          method: 'POST',
+        }),
+      () => fallbackDuplicateProject(id),
+      isLocalFallbackId(id),
+    ),
 
   deleteProject: (id: string) =>
-    requestJson<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
+    withStaticFallback(
+      () => requestJson<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
+      () => fallbackDeleteProject(id),
+      isLocalFallbackId(id),
+    ),
 
   ingestMediaWithProgress: async (
     file: File | Blob,
@@ -221,6 +354,9 @@ export const api = {
     options?: { languageOverride?: string; vocabulary?: string[] },
   ): Promise<HydratedProject> => {
     const caps = await getHealthCapabilities();
+    if (!caps?.ok) {
+      return fallbackIngestLocalMedia(file, filename, sourceType, title, onProgress);
+    }
 
     // Strategy 1: Direct client-to-Vercel-Blob multipart upload (supports up to 2 GB cleanly on Vercel)
     if (caps?.blobStorageConfigured) {
@@ -385,16 +521,31 @@ export const api = {
     });
   },
 
-  importMediaFromUrl: (payload: {
+  importMediaFromUrl: async (payload: {
     url: string;
     title?: string;
     languageOverride?: string;
     vocabulary?: string[];
-  }) =>
-    requestJson<{ importJob: UrlImportJob; project: HydratedProject | null }>('/api/media/import-url', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  }) => {
+    try {
+      return await requestJson<{ importJob: UrlImportJob; project: HydratedProject | null }>(
+        '/api/media/import-url',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        },
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.isJsonError) throw err;
+      const online = await isBackendOnline();
+      if (!online) {
+        throw new Error(
+          'Remote URL download requires the Node/FFmpeg backend server (set VITE_API_BASE_URL or upload a local video file instead).',
+        );
+      }
+      throw err;
+    }
+  },
 
   getUrlImportStatus: (importId: string) =>
     requestJson<{ importJob: UrlImportJob; project: HydratedProject | null }>(
@@ -411,56 +562,108 @@ export const api = {
   },
 
   updateVocabulary: (projectId: string, vocabulary: string[]) =>
-    requestJson<{ vocabulary: string[]; project: HydratedProject }>(
-      `/api/projects/${projectId}/vocabulary`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ vocabulary }),
-      },
+    withStaticFallback(
+      () =>
+        requestJson<{ vocabulary: string[]; project: HydratedProject }>(
+          `/api/projects/${projectId}/vocabulary`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({ vocabulary }),
+          },
+        ),
+      () => fallbackUpdateVocabulary(projectId, vocabulary),
+      isLocalFallbackId(projectId),
     ),
 
   correctTranscriptWord: (projectId: string, wordId: string, newWord: string) =>
-    requestJson<{ project: HydratedProject; analysis: MediaAnalysis; updatedWord: TranscriptWord }>(
-      `/api/projects/${projectId}/transcript/word`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ wordId, newWord }),
-      },
+    withStaticFallback(
+      () =>
+        requestJson<{ project: HydratedProject; analysis: MediaAnalysis; updatedWord: TranscriptWord }>(
+          `/api/projects/${projectId}/transcript/word`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ wordId, newWord }),
+          },
+        ),
+      () => fallbackCorrectTranscriptWord(projectId, wordId, newWord),
+      isLocalFallbackId(projectId),
     ),
 
   retranscribeProject: (
     projectId: string,
     payload: { languageOverride?: string; vocabulary?: string[]; audioStreamIndex?: number },
   ) =>
-    requestJson<{ job: AnalysisJob; analysis: MediaAnalysis; project: HydratedProject }>(
-      `/api/projects/${projectId}/retranscribe`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
+    withStaticFallback(
+      () =>
+        requestJson<{ job: AnalysisJob; analysis: MediaAnalysis; project: HydratedProject }>(
+          `/api/projects/${projectId}/retranscribe`,
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          },
+        ),
+      () => {
+        const { project } = fallbackGetProject(projectId);
+        const analysis = project.media?.analysis;
+        if (!analysis) {
+          throw new Error('Server speech engine unavailable for re-transcription.');
+        }
+        const now = new Date().toISOString();
+        const job: AnalysisJob = {
+          id: `job-local-${Date.now()}`,
+          mediaId: project.mediaId,
+          projectId,
+          selectedAudioStream: analysis.selectedAudioStream ?? 0,
+          status: 'complete',
+          overallProgress: 100,
+          audioExtractionStatus: 'completed',
+          transcriptionStatus: 'completed',
+          chunkTotal: 1,
+          chunkCompleted: 1,
+          chunkFailed: 0,
+          alignmentStatus: 'completed',
+          captionStatus: 'completed',
+          detectedLanguage: analysis.detectedLanguage || 'en',
+          createdAt: now,
+          updatedAt: now,
+        };
+        return {
+          job,
+          analysis,
+          project,
+        };
       },
+      isLocalFallbackId(projectId),
     ),
 
   translateProject: (projectId: string, targetLanguage: string) =>
-    requestJson<{ track: TranslationTrack; analysis: MediaAnalysis }>(
-      `/api/projects/${projectId}/translate`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ targetLanguage }),
-      },
+    withStaticFallback(
+      () =>
+        requestJson<{ track: TranslationTrack; analysis: MediaAnalysis }>(
+          `/api/projects/${projectId}/translate`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ targetLanguage }),
+          },
+        ),
+      () => fallbackTranslateProject(projectId, targetLanguage),
+      isLocalFallbackId(projectId),
     ),
 
   planAiEdit: (projectId: string, prompt: string, currentState: ProjectState) =>
-    requestJson<{
-      plan: EditPlan;
-      impact: EditImpactReport;
-      searchHits: SearchHit[];
-      stagesExecuted?: string[];
-    }>(
-      '/api/ai/plan',
-      {
-        method: 'POST',
-        body: JSON.stringify({ projectId, prompt, currentState }),
-      },
+    withStaticFallback(
+      () =>
+        requestJson<{
+          plan: EditPlan;
+          impact: EditImpactReport;
+          searchHits: SearchHit[];
+          stagesExecuted?: string[];
+        }>('/api/ai/plan', {
+          method: 'POST',
+          body: JSON.stringify({ projectId, prompt, currentState }),
+        }),
+      () => fallbackPlanAiEdit(projectId, prompt, currentState),
+      isLocalFallbackId(projectId),
     ),
 
   reanalyzeMedia: (mediaId: string, projectId?: string) =>
@@ -482,8 +685,16 @@ export const api = {
     ),
 
   getProjectAnalysisStatus: (projectId: string) =>
-    requestJson<{ job: AnalysisJob | null; analysis: MediaAnalysis | null; project: HydratedProject }>(
-      `/api/projects/${projectId}/analysis-status`,
+    withStaticFallback(
+      () =>
+        requestJson<{ job: AnalysisJob | null; analysis: MediaAnalysis | null; project: HydratedProject }>(
+          `/api/projects/${projectId}/analysis-status`,
+        ),
+      () => {
+        const { project } = fallbackGetProject(projectId);
+        return { job: null, analysis: project.media?.analysis ?? null, project };
+      },
+      isLocalFallbackId(projectId),
     ),
 
   retryFailedAnalysisChunks: (jobId: string) =>
@@ -504,28 +715,43 @@ export const api = {
   uploadProjectMusic: async (
     projectId: string,
     file: File,
-  ): Promise<{ url: string; filename: string; durationSec: number }> => {
-    const form = new FormData();
-    form.append('audio', file, file.name);
-    return requestJson<{ url: string; filename: string; durationSec: number }>(
-      `/api/projects/${projectId}/music`,
-      {
-        method: 'POST',
-        body: form,
+  ): Promise<{ url: string; filename: string; durationSec: number }> =>
+    withStaticFallback(
+      async () => {
+        const form = new FormData();
+        form.append('audio', file, file.name);
+        return requestJson<{ url: string; filename: string; durationSec: number }>(
+          `/api/projects/${projectId}/music`,
+          {
+            method: 'POST',
+            body: form,
+          },
+        );
       },
-    );
-  },
+      () => fallbackUploadMusic(file),
+      isLocalFallbackId(projectId),
+    ),
 
   searchProject: (projectId: string, query: string, state: ProjectState) =>
-    requestJson<{ hits: SearchHit[] }>(`/api/projects/${projectId}/search`, {
-      method: 'POST',
-      body: JSON.stringify({ query, state }),
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ hits: SearchHit[] }>(`/api/projects/${projectId}/search`, {
+          method: 'POST',
+          body: JSON.stringify({ query, state }),
+        }),
+      () => fallbackSearchProject(projectId, query, state),
+      isLocalFallbackId(projectId),
+    ),
 
   regenerateVersions: (projectId: string) =>
-    requestJson<{ versions: EditVersion[] }>(`/api/projects/${projectId}/versions`, {
-      method: 'POST',
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ versions: EditVersion[] }>(`/api/projects/${projectId}/versions`, {
+          method: 'POST',
+        }),
+      () => fallbackRegenerateVersions(projectId),
+      isLocalFallbackId(projectId),
+    ),
 
   startExport: (
     projectId: string,
@@ -533,10 +759,20 @@ export const api = {
     resolution: ExportJob['resolution'],
     quality: ExportJob['quality'],
   ) =>
-    requestJson<{ job: ExportJob }>('/api/exports', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, state, resolution, quality }),
-    }),
+    withStaticFallback(
+      () =>
+        requestJson<{ job: ExportJob }>('/api/exports', {
+          method: 'POST',
+          body: JSON.stringify({ projectId, state, resolution, quality }),
+        }),
+      () => fallbackStartExport(projectId, state, resolution, quality),
+      isLocalFallbackId(projectId),
+    ),
 
-  getExportStatus: (jobId: string) => requestJson<{ job: ExportJob }>(`/api/exports/${jobId}`),
+  getExportStatus: (jobId: string) =>
+    withStaticFallback(
+      () => requestJson<{ job: ExportJob }>(`/api/exports/${jobId}`),
+      () => fallbackGetExportStatus(jobId),
+      isLocalFallbackId(jobId),
+    ),
 };

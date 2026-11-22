@@ -1,7 +1,46 @@
-import type { DemoCatalogItem, HydratedProject } from './api';
-import type { MediaAnalysis, ProjectState } from '../shared/types';
+import type {
+  FillerHit,
+  ImportantMoment,
+  MediaAnalysis,
+  SceneInfo,
+  SilenceRange,
+  SpeakerInfo,
+  TranscriptSegment,
+  TranscriptWord,
+} from '../shared/types';
+import {
+  createInitialProjectState,
+  generateThreeVersions,
+} from '../shared/timelineEngine';
+import type { DemoCatalogItem, HydratedProject, LanguageOption } from './api';
+import { getBundledThumbForDemo } from './demoAssets';
 
-export const FALLBACK_DEMOS: DemoCatalogItem[] = [
+interface BeatSpec {
+  speaker: string;
+  topic: string;
+  text: string;
+  pauseAfterSec: number;
+  sceneTitle: string;
+  sceneDescription: string;
+  objects: string[];
+  activities: string[];
+  important?: {
+    category: ImportantMoment['category'];
+    title: string;
+    reason: string;
+  };
+}
+
+interface FallbackDemoSpec {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  examplePrompts: string[];
+  beats: BeatSpec[];
+}
+
+const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
   {
     id: 'demo-keynote',
     title: 'NovaPulse AI Product Keynote',
@@ -15,642 +54,631 @@ export const FALLBACK_DEMOS: DemoCatalogItem[] = [
       'Keep only the product demonstration.',
       'Find every section where the speaker mentions AI.',
     ],
-    mediaUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    durationSec: 74.2,
-    topics: ['Introduction', 'Core Benefits', 'Pricing Overview', 'Live Demonstration', 'Closing CTA'],
-    transcriptCount: 6,
+    beats: [
+      {
+        speaker: 'Elena Vance',
+        topic: 'Introduction',
+        text: 'Welcome everyone to the NovaPulse AI launch keynote. Today we are changing how teams edit video by meaning instead of scrubbing timelines.',
+        pauseAfterSec: 1.6,
+        sceneTitle: 'Keynote Stage Opening',
+        sceneDescription:
+          'Keynote speaker on main stage introducing NovaPulse AI under cyan and violet stage lighting.',
+        objects: ['stage', 'lectern', 'projection screen', 'audience'],
+        activities: ['keynote speech', 'audience presentation'],
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Core Benefits',
+        text: 'With our semantic AI engine, creators cut post production time by eighty percent while keeping narrative clarity intact.',
+        pauseAfterSec: 0.4,
+        sceneTitle: 'Productivity Benefit Slide',
+        sceneDescription: 'Stage presentation highlighting eighty percent faster editing workflow.',
+        objects: ['keynote screen', 'lectern', 'microphone'],
+        activities: ['explaining product benefits'],
+        important: {
+          category: 'benefit',
+          title: '80% Time Savings Benefit',
+          reason: 'Core value proposition proving workflow speedup.',
+        },
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Pricing Overview',
+        text: 'Um, let us talk about simple plans. Pricing starts at forty nine dollars per seat each month for unlimited AI indexing.',
+        pauseAfterSec: 1.8,
+        sceneTitle: 'Pricing Tier Reveal',
+        sceneDescription: 'First pricing announcement detailing forty nine dollar per seat plan.',
+        objects: ['pricing chart', 'stage lighting'],
+        activities: ['presenting pricing'],
+        important: {
+          category: 'pricing',
+          title: 'Primary Pricing Tier ($49/seat)',
+          reason: 'Initial transparent pricing explanation.',
+        },
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Live Demonstration',
+        text: 'Now watch this live AI product demonstration. Type remove filler words or jump to any spoken topic and the cut renders automatically.',
+        pauseAfterSec: 0.6,
+        sceneTitle: 'Live AI Editing Demonstration',
+        sceneDescription:
+          'Live walkthrough demonstrating natural language prompt editing and instant timeline sync.',
+        objects: ['demo interface', 'timeline', 'stage display'],
+        activities: ['product demonstration', 'software walkthrough'],
+        important: {
+          category: 'demonstration',
+          title: 'Live AI Prompt Demonstration',
+          reason: 'Flagship live demonstration of prompt-based editing.',
+        },
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Repeated Pricing',
+        text: 'Uh, and just as a quick reminder, pricing starts at forty nine dollars per seat with zero hidden export fees.',
+        pauseAfterSec: 1.5,
+        sceneTitle: 'Pricing Recap Slide',
+        sceneDescription: 'Second mention of pricing repeating the forty nine dollar rate.',
+        objects: ['stage screen', 'lectern'],
+        activities: ['repeating pricing details'],
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Customer Proof',
+        text: 'Studios using AI semantic search find exact camera takes in seconds rather than hours of manual review.',
+        pauseAfterSec: 0.5,
+        sceneTitle: 'Enterprise Adoption Showcase',
+        sceneDescription: 'Overview of production teams adopting semantic search.',
+        objects: ['audience', 'display wall'],
+        activities: ['customer case study'],
+        important: {
+          category: 'explanation',
+          title: 'Semantic Search Workflow Explanation',
+          reason: 'Explains how studios locate takes instantly.',
+        },
+      },
+      {
+        speaker: 'Elena Vance',
+        topic: 'Conclusion CTA',
+        text: 'Terms apply to annual enterprise billing. Start your free fourteen day trial today and publish faster with NovaPulse AI.',
+        pauseAfterSec: 0.3,
+        sceneTitle: 'Closing Call To Action',
+        sceneDescription: 'Final keynote frame with disclaimer and free trial call to action.',
+        objects: ['cta banner', 'stage spotlight'],
+        activities: ['closing keynote', 'call to action'],
+        important: {
+          category: 'cta',
+          title: 'Free Trial Call To Action & Terms',
+          reason: 'Essential conversion CTA and billing disclaimer.',
+        },
+      },
+    ],
   },
   {
     id: 'demo-podcast',
-    title: 'The Founders Matrix Podcast',
-    category: 'Podcast',
+    title: 'Founders Unfiltered: Two-Speaker Podcast',
+    category: 'Podcast / Interview',
     description:
-      'Two-host tech conversation with overlapping laughter, crosstalk, multiple tangents, audio dropouts, and debate on open source AI economics.',
+      'Dual-host studio conversation exploring AI post-production, camera workflows, natural pauses, filler words, and speaker handoffs.',
     examplePrompts: [
-      'Remove all tangents about coffee.',
-      'Clean up crosstalk and awkward pauses.',
-      'Highlight Marcus explaining unit economics.',
-      'Create a 45-second teaser clip.',
+      'Remove filler words.',
+      'Remove unnecessary pauses.',
+      'Find every section where the speaker mentions AI.',
+      'Add captions to the entire video.',
     ],
-    mediaUrl: '/src/assets/images/demo_podcast_bg_1795193519906.jpg',
-    thumbnailUrl: '/src/assets/images/demo_podcast_bg_1795193519906.jpg',
-    durationSec: 88.5,
-    topics: ['Podcast Banter', 'Sponsor Message', 'Venture Capital', 'Open Source', 'Wrap Up'],
-    transcriptCount: 8,
+    beats: [
+      {
+        speaker: 'Maya Chen',
+        topic: 'Podcast Intro',
+        text: 'Welcome back to Founders Unfiltered. Today Liam and I are breaking down how AI tools transform video editing.',
+        pauseAfterSec: 1.2,
+        sceneTitle: 'Studio Two-Shot Opening',
+        sceneDescription: 'Maya and Liam seated across a walnut desk with studio broadcast microphones.',
+        objects: ['microphones', 'headphones', 'audio mixer', 'walnut wall'],
+        activities: ['podcast hosting', 'introductory conversation'],
+      },
+      {
+        speaker: 'Liam Brooks',
+        topic: 'Editing Bottleneck',
+        text: 'Um, honestly, scrubbing ninety minutes of raw interview footage used to take my whole afternoon.',
+        pauseAfterSec: 1.5,
+        sceneTitle: 'Liam Guest Perspective',
+        sceneDescription: 'Liam speaking into dynamic studio mic with notes in hand.',
+        objects: ['microphone', 'notebook', 'mixer'],
+        activities: ['interview response', 'storytelling'],
+      },
+      {
+        speaker: 'Maya Chen',
+        topic: 'Content Protection',
+        text: 'Exactly. What changed everything for our studio was content protection so an editor never deletes a sponsor disclaimer by mistake.',
+        pauseAfterSec: 0.5,
+        sceneTitle: 'Maya Explaining Protection',
+        sceneDescription: 'Maya gesturing warmly while discussing editorial safeguards.',
+        objects: ['coffee mug', 'microphone', 'headphones'],
+        activities: ['explaining safety guardrails'],
+        important: {
+          category: 'explanation',
+          title: 'Sponsor & Disclaimer Protection Insight',
+          reason: 'Key podcast takeaway on protecting critical segments.',
+        },
+      },
+      {
+        speaker: 'Liam Brooks',
+        topic: 'Multi-Version Publishing',
+        text: 'Uh, and generating a fast hook version for social alongside our full episode saved our team ten hours a week.',
+        pauseAfterSec: 0.4,
+        sceneTitle: 'Multi-Format Discussion',
+        sceneDescription: 'Both hosts discussing social hooks versus deep-dive episodes.',
+        objects: ['audio console', 'headphones'],
+        activities: ['podcast dialogue'],
+        important: {
+          category: 'benefit',
+          title: 'Ten Hours Saved Per Week',
+          reason: 'Quantified time savings benefit from multi-version export.',
+        },
+      },
+      {
+        speaker: 'Maya Chen',
+        topic: 'Episode Outro',
+        text: 'Subscribe for next week when we test live camera workflows. Thanks for tuning in.',
+        pauseAfterSec: 0.3,
+        sceneTitle: 'Podcast Closing',
+        sceneDescription: 'Hosts wrapping up the interview.',
+        objects: ['microphones', 'studio desk'],
+        activities: ['closing remarks'],
+        important: {
+          category: 'cta',
+          title: 'Subscribe Call To Action',
+          reason: 'Channel subscription CTA at close.',
+        },
+      },
+    ],
   },
   {
     id: 'demo-tutorial',
-    title: 'Spatial Optics Pro Tutorial',
-    category: 'Software Tutorial',
+    title: 'Color & Prompt Editing Masterclass',
+    category: 'Educational Tutorial',
     description:
-      'In-depth software tutorial with mouse clicks, mistakes, retakes, repeated explanations, and technical workflow walkthrough.',
+      'Step-by-step creator tutorial covering footage ingest, transcript navigation, semantic search, and clean MP4 rendering.',
     examplePrompts: [
-      'Cut out the mistake where I misclick the menu.',
-      'Speed up the rendering progress section by 3x.',
-      'Remove repetitive instructions.',
-      'Add step-by-step captions.',
+      'Make the introduction twice as fast.',
+      'Change captions to yellow.',
+      'Remove unnecessary pauses.',
+      'Move the conclusion to the beginning.',
     ],
-    mediaUrl: '/src/assets/images/demo_tutorial_bg_1795193519231.jpg',
-    thumbnailUrl: '/src/assets/images/demo_tutorial_bg_1795193519231.jpg',
-    durationSec: 62.0,
-    topics: ['Workspace Setup', 'Layer Adjustments', 'Mistake & Retake', 'Export Settings'],
-    transcriptCount: 5,
-  },
-  {
-    id: 'demo-marketing',
-    title: 'Horizon Launch Commercial',
-    category: 'Marketing Video',
-    description:
-      'Fast-paced commercial with brand slogans, pricing disclaimer, testimonial quotes, and cinematic background music cues.',
-    examplePrompts: [
-      'Shorten into a 15-second social media reel.',
-      'Protect the brand slogan and pricing disclaimer.',
-      'Enhance caption styling with cyan accents.',
+    beats: [
+      {
+        speaker: 'Marcus Cole',
+        topic: 'Tutorial Introduction',
+        text: 'Hey creators, in this masterclass you will learn how to turn raw studio footage into a finished edit using plain English prompts.',
+        pauseAfterSec: 1.4,
+        sceneTitle: 'Workstation Overview',
+        sceneDescription: 'Creator desk with ultrawide monitor showing color curves and cinema lens.',
+        objects: ['ultrawide monitor', 'keyboard', 'cinema lens', 'headphones'],
+        activities: ['tutorial introduction', 'desk showcase'],
+      },
+      {
+        speaker: 'Marcus Cole',
+        topic: 'Step 1 Ingest & Index',
+        text: 'Step one is indexing your clip. The AI maps every spoken word, silence gap, and scene change onto a unified timeline.',
+        pauseAfterSec: 0.5,
+        sceneTitle: 'Timeline & Waveform View',
+        sceneDescription: 'Close focus on monitor editing interface and audio scopes.',
+        objects: ['monitor', 'waveform', 'color wheels'],
+        activities: ['teaching indexing workflow'],
+        important: {
+          category: 'explanation',
+          title: 'Step 1: Unified Semantic Indexing',
+          reason: 'Core educational concept explaining how indexing works.',
+        },
+      },
+      {
+        speaker: 'Marcus Cole',
+        topic: 'Step 2 Warning & Safety',
+        text: 'Important warning before exporting: always verify your audio sample rate and protected disclaimer markers so nothing gets clipped.',
+        pauseAfterSec: 1.3,
+        sceneTitle: 'Export Pre-Flight Warning',
+        sceneDescription: 'Desk shot highlighting audio hardware and SSD drive.',
+        objects: ['ssd drive', 'notebook', 'pen'],
+        activities: ['sharing technical warning'],
+        important: {
+          category: 'warning',
+          title: 'Audio & Disclaimer Pre-Flight Warning',
+          reason: 'Critical instructional warning to prevent export mistakes.',
+        },
+      },
+      {
+        speaker: 'Marcus Cole',
+        topic: 'Tutorial Conclusion',
+        text: 'Now try exporting in 1080p MP4 and drop your questions in the comments below.',
+        pauseAfterSec: 0.3,
+        sceneTitle: 'Final Render Summary',
+        sceneDescription: 'Full studio workstation wrap-up.',
+        objects: ['ultrawide monitor', 'camera lens'],
+        activities: ['wrapping up tutorial'],
+        important: {
+          category: 'cta',
+          title: 'Export & Community CTA',
+          reason: 'Final call to action for students.',
+        },
+      },
     ],
-    mediaUrl: '/src/assets/images/demo_marketing_bg_1795193520022.jpg',
-    thumbnailUrl: '/src/assets/images/demo_marketing_bg_1795193520022.jpg',
-    durationSec: 45.0,
-    topics: ['Hook', 'Product Showcase', 'Customer Proof', 'Special Offer'],
-    transcriptCount: 4,
   },
   {
     id: 'demo-travel',
-    title: 'Nordic Horizons Cinematic Reel',
-    category: 'Travel & Landscape',
+    title: 'Big Sur Dawn Drive Travel Vlog',
+    category: 'Travel Vlog',
     description:
-      'Scenic landscape compilation with ambient drone shots, wind audio, spoken voiceover reflections, and visual scene transitions.',
+      'Atmospheric coastal road trip vlog with golden-hour narration, scenic breathing pauses, and travel storytelling.',
     examplePrompts: [
-      'Remove wind rumble and silent gaps.',
-      'Keep only fjord and mountain footage.',
-      'Sync cuts to voiceover beats.',
+      'Remove unnecessary pauses.',
+      'Add background music.',
+      'Make the introduction twice as fast.',
+      'Add captions to the entire video.',
     ],
-    mediaUrl: '/src/assets/images/demo_travel_bg_1795193519336.jpg',
-    thumbnailUrl: '/src/assets/images/demo_travel_bg_1795193519336.jpg',
-    durationSec: 52.4,
-    topics: ['Fjord Sunrise', 'Mountain Ascent', 'Glacier Valley', 'Sunset Return'],
-    transcriptCount: 4,
+    beats: [
+      {
+        speaker: 'Aria Navarro',
+        topic: 'Sunrise Departure',
+        text: 'Five thirty in the morning on Highway One, and the coastal fog is finally breaking over the Pacific cliffs.',
+        pauseAfterSec: 1.7,
+        sceneTitle: 'Golden Hour Coastal Highway',
+        sceneDescription: 'Sweeping aerial view of sunlit cliffside road and ocean surf.',
+        objects: ['coastal highway', 'ocean waves', 'cliffs', 'cars'],
+        activities: ['road trip driving', 'sunrise filming'],
+      },
+      {
+        speaker: 'Aria Navarro',
+        topic: 'Scenic Bridge Crossing',
+        text: 'Every curve reveals another hidden cove. Travelling with lightweight gear lets us capture moments without slowing down.',
+        pauseAfterSec: 1.4,
+        sceneTitle: 'Cliffside Bridge Vista',
+        sceneDescription: 'Warm sunlight illuminating bridge arching over rugged coast.',
+        objects: ['bridge', 'headlands', 'sunlight'],
+        activities: ['aerial sightseeing'],
+        important: {
+          category: 'benefit',
+          title: 'Lightweight Filmmaking Insight',
+          reason: 'Core creative vlog reflection.',
+        },
+      },
+      {
+        speaker: 'Aria Navarro',
+        topic: 'Vlog Closing',
+        text: 'Follow along for part two as we hike into the redwoods at dusk.',
+        pauseAfterSec: 0.4,
+        sceneTitle: 'Horizon Sunset Outro',
+        sceneDescription: 'Wide coastal horizon fading into warm clouds.',
+        objects: ['sun', 'clouds', 'pacific ocean'],
+        activities: ['vlog outro'],
+        important: {
+          category: 'cta',
+          title: 'Part Two Series CTA',
+          reason: 'Viewer retention CTA for next episode.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'demo-marketing',
+    title: 'Aether SE-1 Smart Camera Launch Spot',
+    category: 'Marketing Video',
+    description:
+      'High-contrast commercial launch spot with product hook, technical demo, pricing disclaimer, and conversion CTA.',
+    examplePrompts: [
+      'Keep only the product demonstration.',
+      'Create a 15-second fast version.',
+      'Remove background noise.',
+      'Change captions to yellow.',
+    ],
+    beats: [
+      {
+        speaker: 'Jordan Vance',
+        topic: 'Launch Hook',
+        text: 'Meet Aether SE One. Cinema grade optics engineered into brushed titanium.',
+        pauseAfterSec: 0.7,
+        sceneTitle: 'Titanium Chassis Reveal',
+        sceneDescription:
+          'Sleek brushed titanium camera on dark slate plinth with cyan and magenta rim lighting.',
+        objects: ['smart camera', 'titanium body', 'slate plinth'],
+        activities: ['product reveal'],
+        important: {
+          category: 'benefit',
+          title: 'Cinema Optics Hook',
+          reason: 'Primary opening brand hook.',
+        },
+      },
+      {
+        speaker: 'Jordan Vance',
+        topic: 'Product Demonstration',
+        text: 'Watch the autofocus lock instantly at sixty frames per second with zero focus breathing in low light.',
+        pauseAfterSec: 1.2,
+        sceneTitle: 'Autofocus Lens Demo',
+        sceneDescription: 'Close inspection of luminous cyan lens ring and precision dials.',
+        objects: ['camera lens', 'control dial', 'cyan ring'],
+        activities: ['product demonstration', 'autofocus test'],
+        important: {
+          category: 'demonstration',
+          title: '60fps Low-Light Autofocus Demo',
+          reason: 'Key product proof demonstration.',
+        },
+      },
+      {
+        speaker: 'Jordan Vance',
+        topic: 'Pricing & Disclaimer',
+        text: 'Pre order today at twelve ninety nine. Limited launch pricing valid through December thirty first, terms apply.',
+        pauseAfterSec: 0.4,
+        sceneTitle: 'Launch Offer & Terms',
+        sceneDescription: 'Architectural gallery framing the flagship camera.',
+        objects: ['gallery plinth', 'lighting strip'],
+        activities: ['pricing announcement', 'legal disclaimer'],
+        important: {
+          category: 'disclaimer',
+          title: 'Launch Pricing & Terms Disclaimer',
+          reason: 'Legally required promotional expiration terms.',
+        },
+      },
+    ],
   },
 ];
 
-const FALLBACK_ANALYSIS: MediaAnalysis = {
-  mediaId: 'demo-keynote',
-  durationSec: 74.2,
-  width: 1280,
-  height: 720,
-  fps: 24,
-  hasAudio: true,
-  detectedAudioStreams: 1,
-  codec: 'h264',
-  analysisMode: 'local-ffmpeg',
-  analysisNote: 'Bundled demo media indexed with exact acoustic word timestamps, scene cues, and silence markers.',
-  waveformPeaks: [
-    0.1, 0.4, 0.7, 0.85, 0.6, 0.3, 0.1, 0.05, 0.6, 0.8, 0.9, 0.75, 0.5, 0.2, 0.05, 0.5, 0.7, 0.8, 0.6, 0.4,
-    0.1, 0.0, 0.0, 0.7, 0.85, 0.9, 0.8, 0.6, 0.3, 0.05, 0.4, 0.65, 0.8, 0.75, 0.5, 0.2, 0.05, 0.6, 0.85, 0.7,
-  ],
-  transcript: [
-    {
-      id: 'seg-1',
-      start: 0.0,
-      end: 8.5,
-      speaker: 'Elena Vance',
-      text: 'Welcome everyone to the NovaPulse AI launch keynote. Today we are changing how teams edit video by meaning instead of scrubbing timelines.',
-      topic: 'Introduction',
-      words: [
-        { id: 'w-1', word: 'Welcome', start: 0.0, end: 0.6, speaker: 'Elena Vance' },
-        { id: 'w-2', word: 'everyone', start: 0.6, end: 1.1, speaker: 'Elena Vance' },
-        { id: 'w-3', word: 'to', start: 1.1, end: 1.3, speaker: 'Elena Vance' },
-        { id: 'w-4', word: 'the', start: 1.3, end: 1.5, speaker: 'Elena Vance' },
-        { id: 'w-5', word: 'NovaPulse', start: 1.5, end: 2.2, speaker: 'Elena Vance' },
-        { id: 'w-6', word: 'AI', start: 2.2, end: 2.6, speaker: 'Elena Vance' },
-        { id: 'w-7', word: 'launch', start: 2.6, end: 3.0, speaker: 'Elena Vance' },
-        { id: 'w-8', word: 'keynote.', start: 3.0, end: 3.6, speaker: 'Elena Vance' },
-        { id: 'w-9', word: 'Today', start: 3.8, end: 4.2, speaker: 'Elena Vance' },
-        { id: 'w-10', word: 'we', start: 4.2, end: 4.4, speaker: 'Elena Vance' },
-        { id: 'w-11', word: 'are', start: 4.4, end: 4.6, speaker: 'Elena Vance' },
-        { id: 'w-12', word: 'changing', start: 4.6, end: 5.1, speaker: 'Elena Vance' },
-        { id: 'w-13', word: 'how', start: 5.1, end: 5.3, speaker: 'Elena Vance' },
-        { id: 'w-14', word: 'teams', start: 5.3, end: 5.7, speaker: 'Elena Vance' },
-        { id: 'w-15', word: 'edit', start: 5.7, end: 6.0, speaker: 'Elena Vance' },
-        { id: 'w-16', word: 'video', start: 6.0, end: 6.4, speaker: 'Elena Vance' },
-        { id: 'w-17', word: 'by', start: 6.4, end: 6.6, speaker: 'Elena Vance' },
-        { id: 'w-18', word: 'meaning', start: 6.6, end: 7.1, speaker: 'Elena Vance' },
-        { id: 'w-19', word: 'instead', start: 7.1, end: 7.5, speaker: 'Elena Vance' },
-        { id: 'w-20', word: 'of', start: 7.5, end: 7.7, speaker: 'Elena Vance' },
-        { id: 'w-21', word: 'scrubbing', start: 7.7, end: 8.1, speaker: 'Elena Vance' },
-        { id: 'w-22', word: 'timelines.', start: 8.1, end: 8.5, speaker: 'Elena Vance' },
-      ],
-    },
-    {
-      id: 'seg-2',
-      start: 8.8,
-      end: 18.2,
-      speaker: 'Elena Vance',
-      text: 'With our semantic AI engine, creators cut post production time by eighty percent while keeping narrative clarity intact.',
-      topic: 'Core Benefits',
-      isImportant: true,
-      importantCategory: 'benefit',
-      words: [
-        { id: 'w-23', word: 'With', start: 8.8, end: 9.1, speaker: 'Elena Vance' },
-        { id: 'w-24', word: 'our', start: 9.1, end: 9.3, speaker: 'Elena Vance' },
-        { id: 'w-25', word: 'semantic', start: 9.3, end: 9.9, speaker: 'Elena Vance' },
-        { id: 'w-26', word: 'AI', start: 9.9, end: 10.3, speaker: 'Elena Vance' },
-        { id: 'w-27', word: 'engine,', start: 10.3, end: 10.8, speaker: 'Elena Vance' },
-        { id: 'w-28', word: 'creators', start: 11.0, end: 11.5, speaker: 'Elena Vance' },
-        { id: 'w-29', word: 'cut', start: 11.5, end: 11.8, speaker: 'Elena Vance' },
-        { id: 'w-30', word: 'post', start: 11.8, end: 12.1, speaker: 'Elena Vance' },
-        { id: 'w-31', word: 'production', start: 12.1, end: 12.7, speaker: 'Elena Vance' },
-        { id: 'w-32', word: 'time', start: 12.7, end: 13.0, speaker: 'Elena Vance' },
-        { id: 'w-33', word: 'by', start: 13.0, end: 13.2, speaker: 'Elena Vance' },
-        { id: 'w-34', word: 'eighty', start: 13.2, end: 13.7, speaker: 'Elena Vance' },
-        { id: 'w-35', word: 'percent', start: 13.7, end: 14.2, speaker: 'Elena Vance' },
-        { id: 'w-36', word: 'while', start: 14.4, end: 14.7, speaker: 'Elena Vance' },
-        { id: 'w-37', word: 'keeping', start: 14.7, end: 15.1, speaker: 'Elena Vance' },
-        { id: 'w-38', word: 'narrative', start: 15.1, end: 15.6, speaker: 'Elena Vance' },
-        { id: 'w-39', word: 'clarity', start: 15.6, end: 16.1, speaker: 'Elena Vance' },
-        { id: 'w-40', word: 'intact.', start: 16.1, end: 16.7, speaker: 'Elena Vance' },
-      ],
-    },
-    {
-      id: 'seg-3',
-      start: 19.5,
-      end: 32.0,
-      speaker: 'Elena Vance',
-      text: 'Um, let us talk about simple plans. Pricing starts at forty nine dollars per seat each month for unlimited AI indexing.',
-      topic: 'Pricing Overview',
-      isImportant: true,
-      importantCategory: 'pricing',
-      words: [
-        { id: 'w-41', word: 'Um,', start: 19.5, end: 19.9, speaker: 'Elena Vance', isFiller: true },
-        { id: 'w-42', word: 'let', start: 20.0, end: 20.2, speaker: 'Elena Vance' },
-        { id: 'w-43', word: 'us', start: 20.2, end: 20.4, speaker: 'Elena Vance' },
-        { id: 'w-44', word: 'talk', start: 20.4, end: 20.8, speaker: 'Elena Vance' },
-        { id: 'w-45', word: 'about', start: 20.8, end: 21.2, speaker: 'Elena Vance' },
-        { id: 'w-46', word: 'simple', start: 21.2, end: 21.7, speaker: 'Elena Vance' },
-        { id: 'w-47', word: 'plans.', start: 21.7, end: 22.2, speaker: 'Elena Vance' },
-        { id: 'w-48', word: 'Pricing', start: 22.6, end: 23.1, speaker: 'Elena Vance' },
-        { id: 'w-49', word: 'starts', start: 23.1, end: 23.5, speaker: 'Elena Vance' },
-        { id: 'w-50', word: 'at', start: 23.5, end: 23.7, speaker: 'Elena Vance' },
-        { id: 'w-51', word: 'forty', start: 23.7, end: 24.1, speaker: 'Elena Vance' },
-        { id: 'w-52', word: 'nine', start: 24.1, end: 24.5, speaker: 'Elena Vance' },
-        { id: 'w-53', word: 'dollars', start: 24.5, end: 25.0, speaker: 'Elena Vance' },
-        { id: 'w-54', word: 'per', start: 25.0, end: 25.3, speaker: 'Elena Vance' },
-        { id: 'w-55', word: 'seat', start: 25.3, end: 25.7, speaker: 'Elena Vance' },
-        { id: 'w-56', word: 'each', start: 25.7, end: 26.0, speaker: 'Elena Vance' },
-        { id: 'w-57', word: 'month', start: 26.0, end: 26.4, speaker: 'Elena Vance' },
-        { id: 'w-58', word: 'for', start: 26.4, end: 26.6, speaker: 'Elena Vance' },
-        { id: 'w-59', word: 'unlimited', start: 26.6, end: 27.3, speaker: 'Elena Vance' },
-        { id: 'w-60', word: 'AI', start: 27.3, end: 27.7, speaker: 'Elena Vance' },
-        { id: 'w-61', word: 'indexing.', start: 27.7, end: 28.3, speaker: 'Elena Vance' },
-      ],
-    },
-    {
-      id: 'seg-4',
-      start: 33.5,
-      end: 48.0,
-      speaker: 'Elena Vance',
-      text: 'Now watch this live AI product demonstration. Type remove filler words or jump to any spoken topic and the cut renders automatically.',
-      topic: 'Live Demonstration',
-      isImportant: true,
-      importantCategory: 'demonstration',
-      words: [
-        { id: 'w-62', word: 'Now', start: 33.5, end: 33.8, speaker: 'Elena Vance' },
-        { id: 'w-63', word: 'watch', start: 33.8, end: 34.2, speaker: 'Elena Vance' },
-        { id: 'w-64', word: 'this', start: 34.2, end: 34.5, speaker: 'Elena Vance' },
-        { id: 'w-65', word: 'live', start: 34.5, end: 34.9, speaker: 'Elena Vance' },
-        { id: 'w-66', word: 'AI', start: 34.9, end: 35.3, speaker: 'Elena Vance' },
-        { id: 'w-67', word: 'product', start: 35.3, end: 35.8, speaker: 'Elena Vance' },
-        { id: 'w-68', word: 'demonstration.', start: 35.8, end: 36.6, speaker: 'Elena Vance' },
-      ],
-    },
-    {
-      id: 'seg-5',
-      start: 49.0,
-      end: 58.5,
-      speaker: 'Elena Vance',
-      text: 'Uh, and just as a quick reminder, pricing starts at forty nine dollars with volume discounts available for enterprise studios.',
-      topic: 'Repeated Pricing',
-      isImportant: true,
-      importantCategory: 'pricing',
-      words: [
-        { id: 'w-69', word: 'Uh,', start: 49.0, end: 49.3, speaker: 'Elena Vance', isFiller: true },
-        { id: 'w-70', word: 'and', start: 49.4, end: 49.6, speaker: 'Elena Vance' },
-        { id: 'w-71', word: 'just', start: 49.6, end: 49.9, speaker: 'Elena Vance' },
-        { id: 'w-72', word: 'as', start: 49.9, end: 50.1, speaker: 'Elena Vance' },
-        { id: 'w-73', word: 'a', start: 50.1, end: 50.2, speaker: 'Elena Vance' },
-        { id: 'w-74', word: 'quick', start: 50.2, end: 50.6, speaker: 'Elena Vance' },
-        { id: 'w-75', word: 'reminder,', start: 50.6, end: 51.1, speaker: 'Elena Vance' },
-        { id: 'w-76', word: 'pricing', start: 51.3, end: 51.8, speaker: 'Elena Vance' },
-        { id: 'w-77', word: 'starts', start: 51.8, end: 52.2, speaker: 'Elena Vance' },
-        { id: 'w-78', word: 'at', start: 52.2, end: 52.4, speaker: 'Elena Vance' },
-        { id: 'w-79', word: 'forty', start: 52.4, end: 52.8, speaker: 'Elena Vance' },
-        { id: 'w-80', word: 'nine', start: 52.8, end: 53.2, speaker: 'Elena Vance' },
-        { id: 'w-81', word: 'dollars', start: 53.2, end: 53.7, speaker: 'Elena Vance' },
-      ],
-    },
-    {
-      id: 'seg-6',
-      start: 60.0,
-      end: 74.2,
-      speaker: 'Elena Vance',
-      text: 'Get started today with your free fourteen-day trial. Visit editmind.ai and transform your raw footage in seconds.',
-      topic: 'Closing CTA',
-      isImportant: true,
-      importantCategory: 'cta',
-      words: [
-        { id: 'w-82', word: 'Get', start: 60.0, end: 60.3, speaker: 'Elena Vance' },
-        { id: 'w-83', word: 'started', start: 60.3, end: 60.8, speaker: 'Elena Vance' },
-        { id: 'w-84', word: 'today', start: 60.8, end: 61.2, speaker: 'Elena Vance' },
-        { id: 'w-85', word: 'with', start: 61.2, end: 61.4, speaker: 'Elena Vance' },
-        { id: 'w-86', word: 'your', start: 61.4, end: 61.6, speaker: 'Elena Vance' },
-        { id: 'w-87', word: 'free', start: 61.6, end: 62.0, speaker: 'Elena Vance' },
-        { id: 'w-88', word: 'fourteen-day', start: 62.0, end: 62.7, speaker: 'Elena Vance' },
-        { id: 'w-89', word: 'trial.', start: 62.7, end: 63.3, speaker: 'Elena Vance' },
-      ],
-    },
-  ],
-  scenes: [
-    {
-      id: 'sc-1',
-      start: 0.0,
-      end: 8.5,
-      title: 'Keynote Opening Stage',
-      description: 'Elena Vance stands at main lectern with cyan and violet stage lighting.',
-      objects: ['stage', 'lectern', 'projection screen', 'audience'],
-      activities: ['keynote speech', 'presentation'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'sc-2',
-      start: 8.8,
-      end: 18.2,
-      title: '80% Faster Benefit Slide',
-      description: 'Keynote slide showing post-production efficiency gains.',
-      objects: ['slide', 'chart', 'microphone'],
-      activities: ['explaining benefits'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'sc-3',
-      start: 19.5,
-      end: 32.0,
-      title: 'Pricing Announcement #1',
-      description: 'First reveal of $49/seat unlimited plan.',
-      objects: ['pricing chart', 'stage display'],
-      activities: ['presenting plans'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'sc-4',
-      start: 33.5,
-      end: 48.0,
-      title: 'Live Product Walkthrough',
-      description: 'Screen capture of EDITMIND AI workspace executing prompt edits in real time.',
-      objects: ['editing interface', 'timeline', 'video player'],
-      activities: ['software demonstration'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'sc-5',
-      start: 49.0,
-      end: 58.5,
-      title: 'Repeated Pricing Reminder',
-      description: 'Second mention of the $49/seat pricing tier.',
-      objects: ['stage display', 'summary graphics'],
-      activities: ['reiterating pricing'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'sc-6',
-      start: 60.0,
-      end: 74.2,
-      title: 'Free Trial Closing Call to Action',
-      description: 'Call to action with 14-day free trial URL on main display.',
-      objects: ['call to action slide', 'website link', 'applause'],
-      activities: ['closing remarks'],
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-  ],
-  speakers: [
-    {
-      id: 'spk-1',
-      name: 'Elena Vance',
-      role: 'Keynote Speaker & Product Lead',
-      color: '#22D3EE',
-      speakingTimeSec: 68.5,
-      segmentCount: 6,
-    },
-  ],
-  importantMoments: [
-    {
-      id: 'imp-1',
-      category: 'benefit',
-      title: '80% Time Savings Benefit',
-      reason: 'Core value proposition proving workflow speedup.',
-      start: 8.8,
-      end: 18.2,
-      protected: true,
-      segmentId: 'seg-2',
-    },
-    {
-      id: 'imp-2',
-      category: 'pricing',
-      title: 'Primary Pricing Tier ($49/seat)',
-      reason: 'Initial transparent pricing explanation.',
-      start: 19.5,
-      end: 32.0,
-      protected: true,
-      segmentId: 'seg-3',
-    },
-    {
-      id: 'imp-3',
-      category: 'demonstration',
-      title: 'Live AI Prompt Demonstration',
-      reason: 'Flagship live demonstration of prompt-based editing.',
-      start: 33.5,
-      end: 48.0,
-      protected: true,
-      segmentId: 'seg-4',
-    },
-    {
-      id: 'imp-4',
-      category: 'cta',
-      title: '14-Day Free Trial Offer',
-      reason: 'Final conversion pitch with domain and trial details.',
-      start: 60.0,
-      end: 74.2,
-      protected: true,
-      segmentId: 'seg-6',
-    },
-  ],
-  silences: [
-    { id: 'sil-1', start: 8.5, end: 8.8, duration: 0.3 },
-    { id: 'sil-2', start: 18.2, end: 19.5, duration: 1.3 },
-    { id: 'sil-3', start: 32.0, end: 33.5, duration: 1.5 },
-    { id: 'sil-4', start: 48.0, end: 49.0, duration: 1.0 },
-    { id: 'sil-5', start: 58.5, end: 60.0, duration: 1.5 },
-  ],
-  fillers: [
-    { id: 'fil-1', word: 'Um,', start: 19.5, end: 19.9, segmentId: 'seg-3' },
-    { id: 'fil-2', word: 'Uh,', start: 49.0, end: 49.3, segmentId: 'seg-5' },
-  ],
-  topics: ['Introduction', 'Core Benefits', 'Pricing Overview', 'Live Demonstration', 'Repeated Pricing', 'Closing CTA'],
-  summary:
-    'Launch keynote featuring repeated pricing mentions, product benefits, live editing demonstration, natural pauses, filler words, and closing call to action.',
-};
+function buildWordsForText(
+  segId: string,
+  text: string,
+  speaker: string,
+  start: number,
+  end: number,
+): { words: TranscriptWord[]; fillers: FillerHit[] } {
+  const rawWords = text.split(/\s+/).filter(Boolean);
+  const dur = Math.max(0.2, end - start);
+  const step = dur / Math.max(1, rawWords.length);
+  const words: TranscriptWord[] = [];
+  const fillers: FillerHit[] = [];
 
-const INITIAL_PROJECT_STATE: ProjectState = {
-  mediaId: 'demo-keynote',
-  duration: 74.2,
-  segments: [
-    {
-      id: 'ts-1',
-      sourceSegmentId: 'seg-1',
-      sourceStart: 0.0,
-      sourceEnd: 8.5,
-      timelineStart: 0.0,
-      timelineEnd: 8.5,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Introduction',
-      topic: 'Introduction',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'ts-2',
-      sourceSegmentId: 'seg-2',
-      sourceStart: 8.8,
-      sourceEnd: 18.2,
-      timelineStart: 8.5,
-      timelineEnd: 17.9,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Core Benefits',
-      topic: 'Core Benefits',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-      locked: true,
-    },
-    {
-      id: 'ts-3',
-      sourceSegmentId: 'seg-3',
-      sourceStart: 19.5,
-      sourceEnd: 32.0,
-      timelineStart: 17.9,
-      timelineEnd: 30.4,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Pricing Tier #1',
-      topic: 'Pricing Overview',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-      locked: true,
-    },
-    {
-      id: 'ts-4',
-      sourceSegmentId: 'seg-4',
-      sourceStart: 33.5,
-      sourceEnd: 48.0,
-      timelineStart: 30.4,
-      timelineEnd: 44.9,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Live AI Demo',
-      topic: 'Live Demonstration',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-      locked: true,
-    },
-    {
-      id: 'ts-5',
-      sourceSegmentId: 'seg-5',
-      sourceStart: 49.0,
-      sourceEnd: 58.5,
-      timelineStart: 44.9,
-      timelineEnd: 54.4,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Repeated Pricing',
-      topic: 'Repeated Pricing',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    },
-    {
-      id: 'ts-6',
-      sourceSegmentId: 'seg-6',
-      sourceStart: 60.0,
-      sourceEnd: 74.2,
-      timelineStart: 54.4,
-      timelineEnd: 68.6,
-      speed: 1,
-      volume: 1,
-      muted: false,
-      label: 'Closing Call to Action',
-      topic: 'Closing CTA',
-      speaker: 'Elena Vance',
-      thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-      locked: true,
-    },
-  ],
-  captionsEnabled: true,
-  captionStyle: {
-    fontFamily: 'Plus Jakarta Sans',
-    fontSize: 20,
-    color: '#FFFFFF',
-    backgroundColor: '#050711',
-    backgroundOpacity: 0.8,
-    position: 'bottom',
-    mode: 'word',
-    highlightActiveWord: true,
-    highlightColor: '#22D3EE',
-  },
-  captions: [
-    {
-      id: 'cap-1',
-      sourceSegmentId: 'seg-1',
-      sourceStart: 0.0,
-      sourceEnd: 8.5,
-      text: 'Welcome everyone to the NovaPulse AI launch keynote.',
-      speaker: 'Elena Vance',
-      words: FALLBACK_ANALYSIS.transcript[0].words,
-      visible: true,
-    },
-    {
-      id: 'cap-2',
-      sourceSegmentId: 'seg-2',
-      sourceStart: 8.8,
-      sourceEnd: 18.2,
-      text: 'With our semantic AI engine, creators cut post production time by eighty percent.',
-      speaker: 'Elena Vance',
-      words: FALLBACK_ANALYSIS.transcript[1].words,
-      visible: true,
-    },
-  ],
-  overlays: [
-    {
-      id: 'txt-1',
-      text: 'NovaPulse AI Keynote',
-      timelineStart: 0.5,
-      timelineEnd: 5.5,
-      x: 5,
-      y: 6,
-      fontSize: 18,
-      color: '#22D3EE',
-      backgroundColor: 'rgba(5,7,17,0.7)',
-    },
-  ],
-  bleeps: [],
-  muteRanges: [],
-  audio: {
-    masterVolume: 1.0,
-    muted: false,
-    noiseReduction: true,
-    fadeInSec: 0.5,
-    fadeOutSec: 0.8,
-    musicEnabled: false,
-    musicPreset: 'ambient-pulse',
-    musicVolume: 0.35,
-    musicFadeInSec: 1.0,
-    musicFadeOutSec: 1.5,
-    audioTrackLocked: false,
-  },
-  trackVisibility: {
-    video: true,
-    audio: true,
-    captions: true,
-    overlays: true,
-    music: true,
-  },
-  trackLocks: {
-    video: false,
-    audio: false,
-    captions: false,
-    overlays: false,
-    music: false,
-  },
-  protectedMomentIds: ['imp-1', 'imp-2', 'imp-3', 'imp-4'],
-  activeVersionId: 'balanced_story',
-};
+  rawWords.forEach((w, idx) => {
+    const ws = Math.round((start + idx * step) * 1000) / 1000;
+    const we = Math.round((start + (idx + 1) * step) * 1000) / 1000;
+    const clean = w.toLowerCase().replace(/[^a-z]/g, '');
+    const isFiller = ['um', 'uh', 'er', 'ah'].includes(clean);
+    words.push({
+      id: `${segId}-w${idx + 1}`,
+      word: w,
+      normalizedText: clean || w.toLowerCase(),
+      start: ws,
+      end: we,
+      speaker,
+      sourceSegmentId: segId,
+      isFiller,
+      confidence: 0.96,
+      verificationStatus: 'verified',
+      timingAccuracy: 'aligned',
+    });
+    if (isFiller) {
+      fillers.push({
+        id: `fil-${segId}-${idx + 1}`,
+        word: w,
+        start: ws,
+        end: we,
+        segmentId: segId,
+      });
+    }
+  });
 
-export const FALLBACK_KEYNOTE_PROJECT: HydratedProject = {
-  id: 'proj-demo-keynote',
-  title: 'NovaPulse AI Product Keynote',
-  mediaId: 'demo-keynote',
-  thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-  state: INITIAL_PROJECT_STATE,
-  history: [
-    {
-      id: 'hist-init',
-      timestamp: '2026-11-21T00:00:00.000Z',
-      label: 'Initial state loaded from demo catalog',
-      prompt: '',
-      durationAfter: 74.2,
-      stateSnapshot: INITIAL_PROJECT_STATE,
-    },
-  ],
-  historyIndex: 0,
-  versions: [
-    {
-      id: 'fast_hook',
-      name: 'Fast Hook Cut',
-      tagline: 'High Energy · Social Reel',
-      description: 'Opens immediately with the live AI product demonstration, strips pauses, and closes with the free trial CTA.',
-      durationSec: 28.4,
-      pacingLabel: '1.15x Energetic',
-      coveragePercent: 48,
-      segmentCount: INITIAL_PROJECT_STATE.segments.length - 1,
-      segments: INITIAL_PROJECT_STATE.segments.filter((s) => s.id !== 'ts-5'),
-      captionsEnabled: true,
-      highlights: ['Direct opening into Live AI Demo', 'Stripped 1.8s dead pauses', 'Fast CTA conversion hook'],
-    },
-    {
-      id: 'balanced_story',
-      name: 'Balanced Narrative Cut',
-      tagline: 'Default · YouTube / Web',
-      description: 'Maintains chronological storytelling, removes the repeated pricing mention and filler words, and protects all key benefits.',
-      durationSec: 46.2,
-      pacingLabel: '1.00x Natural',
-      coveragePercent: 78,
-      segmentCount: INITIAL_PROJECT_STATE.segments.length,
-      segments: INITIAL_PROJECT_STATE.segments,
-      captionsEnabled: true,
-      highlights: ['Chronological speaker flow', 'Pruned duplicate pricing', 'Retained all protected benefits'],
-    },
-    {
-      id: 'detailed_explainer',
-      name: 'Detailed Explainer Cut',
-      tagline: 'Complete · Master Archival',
-      description: 'Full fidelity cut retaining every explanation, technical disclaimer, and word-synced subtitles for comprehensive review.',
-      durationSec: 68.6,
-      pacingLabel: '1.00x Complete',
-      coveragePercent: 100,
-      segmentCount: INITIAL_PROJECT_STATE.segments.length,
-      segments: INITIAL_PROJECT_STATE.segments,
-      captionsEnabled: true,
-      highlights: ['100% full content retention', 'All speaker nuances preserved', 'Complete word-synced subtitles'],
-    },
-  ],
-  createdAt: '2026-11-21T00:00:00.000Z',
-  updatedAt: '2026-11-21T00:00:00.000Z',
-  media: {
-    id: 'demo-keynote',
-    sourceType: 'demo',
-    filename: 'demo-keynote.mp4',
-    mimeType: 'video/mp4',
-    url: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    thumbnailUrl: '/src/assets/images/demo_keynote_bg_1795193518740.jpg',
-    durationSec: 74.2,
+  return { words, fillers };
+}
+
+function buildFallbackAnalysis(spec: FallbackDemoSpec): MediaAnalysis {
+  const thumb = getBundledThumbForDemo(spec.id);
+  const transcript: TranscriptSegment[] = [];
+  const scenes: SceneInfo[] = [];
+  const importantMoments: ImportantMoment[] = [];
+  const silences: SilenceRange[] = [];
+  const fillers: FillerHit[] = [];
+  const speakerMap = new Map<string, { time: number; count: number }>();
+
+  let cursor = 0;
+
+  spec.beats.forEach((beat, i) => {
+    const wordCount = beat.text.split(/\s+/).filter(Boolean).length;
+    const speechDur = Math.max(4, Math.round(wordCount * 0.42 * 100) / 100);
+    const beatStart = Math.round(cursor * 1000) / 1000;
+    const beatEnd = Math.round((cursor + speechDur) * 1000) / 1000;
+    const pauseDur = beat.pauseAfterSec || 0;
+
+    if (pauseDur >= 0.8) {
+      silences.push({
+        id: `sil-${spec.id}-${i + 1}`,
+        start: beatEnd,
+        end: Math.round((beatEnd + pauseDur) * 1000) / 1000,
+        duration: Math.round(pauseDur * 1000) / 1000,
+      });
+    }
+
+    const totalClipDur = speechDur + pauseDur;
+    const segId = `tr-${spec.id}-${i + 1}`;
+    const builtWords = buildWordsForText(segId, beat.text, beat.speaker, beatStart, beatEnd);
+    fillers.push(...builtWords.fillers);
+
+    transcript.push({
+      id: segId,
+      start: beatStart,
+      end: Math.round((beatStart + totalClipDur) * 1000) / 1000,
+      speaker: beat.speaker,
+      text: beat.text,
+      topic: beat.topic,
+      words: builtWords.words,
+      isImportant: Boolean(beat.important),
+      importantCategory: beat.important?.category,
+    });
+
+    if (beat.important) {
+      importantMoments.push({
+        id: `imp-${spec.id}-${i + 1}`,
+        category: beat.important.category,
+        title: beat.important.title,
+        reason: beat.important.reason,
+        start: beatStart,
+        end: beatEnd,
+        protected: true,
+        segmentId: segId,
+      });
+    }
+
+    const spk = speakerMap.get(beat.speaker) || { time: 0, count: 0 };
+    spk.time += speechDur;
+    spk.count += 1;
+    speakerMap.set(beat.speaker, spk);
+
+    scenes.push({
+      id: `sc-${spec.id}-${i + 1}`,
+      start: beatStart,
+      end: Math.round((beatStart + totalClipDur) * 1000) / 1000,
+      title: beat.sceneTitle,
+      description: beat.sceneDescription,
+      objects: beat.objects,
+      activities: beat.activities,
+      thumbnailUrl: thumb,
+    });
+
+    cursor += totalClipDur;
+  });
+
+  const palette = ['#22D3EE', '#A855F7', '#EC4899', '#F59E0B'];
+  const speakers: SpeakerInfo[] = Array.from(speakerMap.entries()).map(([name, stats], idx) => ({
+    id: `spk-${idx + 1}`,
+    name,
+    role: idx === 0 ? 'Primary Speaker' : 'Co-Host / Guest',
+    color: palette[idx % palette.length],
+    speakingTimeSec: Math.round(stats.time * 10) / 10,
+    segmentCount: stats.count,
+  }));
+
+  const durationSec = Math.round(cursor * 1000) / 1000;
+  const peaks: number[] = [];
+  for (let i = 0; i < 140; i++) {
+    const t = (i / 140) * durationSec;
+    const inSilence = silences.some((s) => t >= s.start && t <= s.end);
+    peaks.push(
+      inSilence
+        ? 0.04
+        : Math.round((0.35 + 0.5 * Math.abs(Math.sin(i * 0.43 + spec.id.length))) * 100) / 100,
+    );
+  }
+
+  return {
+    mediaId: spec.id,
+    durationSec,
     width: 1280,
     height: 720,
+    fps: 24,
     hasAudio: true,
+    detectedAudioStreams: 1,
+    codec: 'h264',
     analysisMode: 'local-ffmpeg',
-    analysis: FALLBACK_ANALYSIS,
-    createdAt: '2026-11-21T00:00:00.000Z',
-  },
-};
+    transcriptionStatus: 'complete',
+    language: 'en',
+    detectedLanguage: 'en',
+    detectedLanguageLabel: 'English',
+    languageConfidence: 0.98,
+    wordCount: transcript.reduce((sum, seg) => sum + seg.words.length, 0),
+    analysisNote:
+      'Interactive demo media with word-level timestamps, speaker markers, silences, and scene index.',
+    waveformPeaks: peaks,
+    transcript,
+    scenes,
+    speakers,
+    importantMoments,
+    silences,
+    fillers,
+    topics: Array.from(new Set(transcript.map((t) => t.topic))),
+    summary: spec.description,
+  };
+}
+
+export const FALLBACK_DEMOS: DemoCatalogItem[] = FALLBACK_DEMO_SPECS.map((spec) => {
+  const thumb = getBundledThumbForDemo(spec.id);
+  const estimatedDuration =
+    Math.round(
+      spec.beats.reduce(
+        (sum, b) => sum + Math.max(4, b.text.split(/\s+/).length * 0.42) + (b.pauseAfterSec || 0),
+        0,
+      ) * 10,
+    ) / 10;
+
+  return {
+    id: spec.id,
+    title: spec.title,
+    category: spec.category,
+    description: spec.description,
+    examplePrompts: spec.examplePrompts,
+    mediaUrl: `/api/demos/${spec.id}/video`,
+    thumbnailUrl: thumb,
+    durationSec: estimatedDuration,
+    topics: spec.beats.map((b) => b.topic),
+    transcriptCount: spec.beats.length,
+  };
+});
+
+export function buildFallbackDemoProject(demoId: string, customTitle?: string): HydratedProject {
+  const spec =
+    FALLBACK_DEMO_SPECS.find((d) => d.id === demoId) || FALLBACK_DEMO_SPECS[0];
+  const thumb = getBundledThumbForDemo(spec.id);
+  const analysis = buildFallbackAnalysis(spec);
+  const initialState = createInitialProjectState(analysis);
+  const versions = generateThreeVersions(analysis);
+  const now = new Date().toISOString();
+  const projectId = `proj-local-${spec.id}-${Date.now().toString(36)}`;
+
+  return {
+    id: projectId,
+    title: customTitle?.trim() || `${spec.title} Edit`,
+    mediaId: spec.id,
+    thumbnailUrl: thumb,
+    state: initialState,
+    history: [
+      {
+        id: `hist-${Date.now().toString(36)}`,
+        timestamp: now,
+        label: 'Initial Timeline',
+        durationAfter: initialState.duration,
+        stateSnapshot: initialState,
+      },
+    ],
+    historyIndex: 0,
+    versions,
+    createdAt: now,
+    updatedAt: now,
+    media: {
+      id: spec.id,
+      sourceType: 'demo',
+      filename: `${spec.id}.mp4`,
+      mimeType: 'video/mp4',
+      url: `/api/demos/${spec.id}/video`,
+      thumbnailUrl: thumb,
+      durationSec: analysis.durationSec,
+      width: 1280,
+      height: 720,
+      hasAudio: true,
+      analysisMode: 'local-ffmpeg',
+      analysis,
+      createdAt: now,
+    },
+  };
+}
+
+export const FALLBACK_KEYNOTE_PROJECT: HydratedProject = buildFallbackDemoProject('demo-keynote');
+
+export const FALLBACK_LANGUAGES: LanguageOption[] = [
+  { code: 'auto', label: 'Auto-Detect', nativeLabel: 'Auto' },
+  { code: 'en', label: 'English', nativeLabel: 'English' },
+  { code: 'es', label: 'Spanish', nativeLabel: 'Español' },
+  { code: 'fr', label: 'French', nativeLabel: 'Français' },
+  { code: 'de', label: 'German', nativeLabel: 'Deutsch' },
+  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' },
+  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
+  { code: 'ja', label: 'Japanese', nativeLabel: '日本語' },
+  { code: 'ko', label: 'Korean', nativeLabel: '한국어' },
+  { code: 'pt', label: 'Portuguese', nativeLabel: 'Português' },
+  { code: 'zh', label: 'Chinese', nativeLabel: '中文' },
+  { code: 'ar', label: 'Arabic', nativeLabel: 'العربية' },
+];

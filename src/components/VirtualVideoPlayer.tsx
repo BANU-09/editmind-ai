@@ -17,6 +17,7 @@ import {
   projectCaptionsToTimeline,
 } from '../shared/timelineEngine';
 import { apiUrl } from '../lib/api';
+import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
 
 interface VirtualVideoPlayerProps {
   mediaUrl: string;
@@ -49,6 +50,8 @@ export function VirtualVideoPlayer({
 }: VirtualVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const posterImgRef = useRef<HTMLImageElement | null>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const bleepCtxRef = useRef<AudioContext | null>(null);
   const bleepOscRef = useRef<OscillatorNode | null>(null);
@@ -58,6 +61,8 @@ export function VirtualVideoPlayer({
 
   const [globalSpeedMult, setGlobalSpeedMult] = useState(1);
   const [volume, setVolume] = useState(1);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [posterVersion, setPosterVersion] = useState(0);
   const [naturalDims, setNaturalDims] = useState<{ w: number; h: number }>({
     w: Math.max(1, mediaWidth || 1280),
     h: Math.max(1, mediaHeight || 720),
@@ -69,6 +74,22 @@ export function VirtualVideoPlayer({
       h: Math.max(1, mediaHeight || 720),
     });
   }, [mediaWidth, mediaHeight, mediaUrl]);
+
+  useEffect(() => {
+    setVideoFailed(!mediaUrl);
+    const resolvedPoster =
+      posterUrl ||
+      getBundledThumbForDemo(
+        mediaUrl?.split('/').find((seg) => seg.startsWith('demo-')),
+      );
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      posterImgRef.current = img;
+      setPosterVersion((v) => v + 1);
+    };
+    img.src = resolvedPoster;
+  }, [mediaUrl, posterUrl]);
 
   const projectedCaptions = useMemo(() => projectCaptionsToTimeline(state), [state]);
   const activeCaption = useMemo(
@@ -243,6 +264,26 @@ export function VirtualVideoPlayer({
   const timeRef = useRef(currentTime);
   timeRef.current = currentTime;
 
+  // Render animated Ken Burns frame whenever fallback canvas is active
+  useEffect(() => {
+    if (!videoFailed) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    renderDemoCanvasFrame(ctx, {
+      width: canvas.width,
+      height: canvas.height,
+      image: posterImgRef.current,
+      sourceTime: mapped?.sourceTime ?? currentTime,
+      duration: Math.max(1, state.duration),
+      topic: mapped?.segment.topic || mapped?.segment.label,
+      speaker: mapped?.segment.speaker,
+      isPlaying,
+      opacity: state.trackVisibility.video ? 1 : 0.15,
+    });
+  }, [videoFailed, posterVersion, currentTime, mapped, isPlaying, state.duration, state.trackVisibility.video]);
+
   useEffect(() => {
     if (!isPlaying) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -344,23 +385,48 @@ export function VirtualVideoPlayer({
           style={{ aspectRatio: `${naturalDims.w} / ${naturalDims.h}` }}
           className="relative max-w-full max-h-full h-full flex items-center justify-center overflow-hidden"
         >
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            poster={posterUrl}
-            playsInline
-            preload="auto"
-            onLoadedMetadata={(e) => {
-              const v = e.currentTarget;
-              if (v.videoWidth > 0 && v.videoHeight > 0) {
-                setNaturalDims({ w: v.videoWidth, h: v.videoHeight });
-              }
-            }}
-            data-testid="editor-video-element"
-            className={`w-full h-full object-contain transition-opacity ${
-              state.trackVisibility.video ? 'opacity-100' : 'opacity-15'
-            }`}
-          />
+          {!videoFailed ? (
+            <video
+              ref={videoRef}
+              src={mediaUrl}
+              poster={posterUrl}
+              playsInline
+              preload="auto"
+              onError={() => setVideoFailed(true)}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                if (v.videoWidth > 0 && v.videoHeight > 0) {
+                  setNaturalDims({ w: v.videoWidth, h: v.videoHeight });
+                }
+              }}
+              data-testid="editor-video-element"
+              className={`w-full h-full object-contain transition-opacity ${
+                state.trackVisibility.video ? 'opacity-100' : 'opacity-15'
+              }`}
+            />
+          ) : (
+            <div className="relative w-full h-full flex items-center justify-center bg-[#060914]">
+              <img
+                src={
+                  posterUrl ||
+                  getBundledThumbForDemo(
+                    mediaUrl?.split('/').find((seg) => seg.startsWith('demo-')),
+                  )
+                }
+                alt={mediaFilename}
+                className={`absolute inset-0 w-full h-full object-contain ${
+                  state.trackVisibility.video ? 'opacity-90' : 'opacity-15'
+                }`}
+              />
+              <canvas
+                ref={canvasRef}
+                width={Math.min(960, Math.max(480, naturalDims.w))}
+                height={Math.min(960, Math.max(270, Math.round((Math.min(960, Math.max(480, naturalDims.w)) / Math.max(1, naturalDims.w)) * naturalDims.h)))}
+                data-testid="editor-canvas-fallback"
+                className="relative z-10 w-full h-full object-contain"
+              />
+            </div>
+          )}
 
           {/* Active Text Overlays Positioned Within True Video Frame */}
           {activeOverlays.map((ov) => (

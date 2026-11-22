@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { UserProfile } from './shared/types';
 import { api, type DemoCatalogItem, type HydratedProject } from './lib/api';
+import { buildFallbackDemoProject, FALLBACK_DEMOS } from './lib/fallbackData';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -11,7 +12,7 @@ type ViewMode = 'landing' | 'dashboard' | 'workspace';
 export default function App() {
   const [view, setView] = useState<ViewMode>('landing');
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [demos, setDemos] = useState<DemoCatalogItem[]>([]);
+  const [demos, setDemos] = useState<DemoCatalogItem[]>(FALLBACK_DEMOS);
   const [projects, setProjects] = useState<HydratedProject[]>([]);
   const [activeProject, setActiveProject] = useState<HydratedProject | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,12 +29,16 @@ export default function App() {
       try {
         const [meRes, demosRes, projRes] = await Promise.all([
           api.me().catch(() => ({ user: null })),
-          api.listDemos().catch(() => ({ demos: [] as DemoCatalogItem[] })),
+          api.listDemos().catch(() => ({ demos: FALLBACK_DEMOS })),
           api.listProjects().catch(() => ({ projects: [] as HydratedProject[] })),
         ]);
         if (cancelled) return;
         setUser(meRes?.user ?? null);
-        setDemos(Array.isArray(demosRes?.demos) ? demosRes.demos : []);
+        const nextDemos =
+          Array.isArray(demosRes?.demos) && demosRes.demos.length > 0
+            ? demosRes.demos
+            : FALLBACK_DEMOS;
+        setDemos(nextDemos);
         setProjects(Array.isArray(projRes?.projects) ? projRes.projects : []);
 
         // Support ?autostart=1 to jump directly to dashboard or first demo
@@ -62,8 +67,11 @@ export default function App() {
       setActiveProject(res.project);
       setView('workspace');
       await refreshProjects().catch(() => {});
-    } catch (err) {
-      setBootError(err instanceof Error ? err.message : 'Could not open demo project.');
+    } catch {
+      const localProj = buildFallbackDemoProject(targetId);
+      setActiveProject(localProj);
+      setProjects((prev) => [localProj, ...prev]);
+      setView('workspace');
     }
   };
 

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
   Check,
   Film,
   Layers,
+  Pause,
   Play,
   Search,
   ShieldAlert,
@@ -15,6 +16,8 @@ import {
   Wand2,
 } from 'lucide-react';
 import { apiUrl, type DemoCatalogItem } from '../lib/api';
+import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
+import { FALLBACK_DEMOS } from '../lib/fallbackData';
 import { ErrorBoundary } from './ErrorBoundary';
 import { HeroOrbCanvas } from './HeroOrbCanvas';
 
@@ -109,15 +112,80 @@ const SEARCH_SAMPLE_HITS = [
 ];
 
 export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPageProps) {
-  const safeDemos = Array.isArray(demos) ? demos : [];
+  const safeDemos = Array.isArray(demos) && demos.length > 0 ? demos : FALLBACK_DEMOS;
   const [activePromptIdx, setActivePromptIdx] = useState(0);
   const [activeVersionIdx, setActiveVersionIdx] = useState(1);
   const [searchFilter, setSearchFilter] = useState('AI');
   const [activeDemoId, setActiveDemoId] = useState<string>(safeDemos[0]?.id || 'demo-keynote');
 
+  const [previewVideoBroken, setPreviewVideoBroken] = useState(false);
+  const [canvasPlaying, setCanvasPlaying] = useState(false);
+  const [canvasTime, setCanvasTime] = useState(0);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewThumbImgRef = useRef<HTMLImageElement | null>(null);
+  const canvasTimeRef = useRef(0);
+  canvasTimeRef.current = canvasTime;
+
   const currentPrompt = PROMPT_EXAMPLES[activePromptIdx] || PROMPT_EXAMPLES[0];
   const currentVersion = VERSION_TABS[activeVersionIdx] || VERSION_TABS[0];
   const selectedDemo = safeDemos.find((d) => d.id === activeDemoId) || safeDemos[0];
+
+  const drawPreviewFrame = (t: number, playing: boolean) => {
+    const canvas = previewCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !selectedDemo) return;
+    renderDemoCanvasFrame(ctx, {
+      width: canvas.width,
+      height: canvas.height,
+      image: previewThumbImgRef.current,
+      sourceTime: t,
+      duration: Math.max(5, selectedDemo.durationSec || 24),
+      topic: selectedDemo.topics?.[0] || selectedDemo.category,
+      speaker: selectedDemo.title,
+      isPlaying: playing,
+    });
+  };
+
+  useEffect(() => {
+    setPreviewVideoBroken(false);
+    setCanvasPlaying(false);
+    setCanvasTime(0);
+    canvasTimeRef.current = 0;
+    if (!selectedDemo) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      previewThumbImgRef.current = img;
+      drawPreviewFrame(0, false);
+    };
+    img.src = getBundledThumbForDemo(selectedDemo.id);
+  }, [selectedDemo?.id]);
+
+  useEffect(() => {
+    if (!previewVideoBroken || !selectedDemo) return;
+    drawPreviewFrame(canvasTimeRef.current, canvasPlaying);
+    if (!canvasPlaying) return;
+
+    let rafId = 0;
+    let lastTs = performance.now();
+    const totalDur = Math.max(5, selectedDemo.durationSec || 24);
+
+    const step = (now: number) => {
+      const dt = Math.min(0.1, (now - lastTs) / 1000);
+      lastTs = now;
+      const next = canvasTimeRef.current + dt;
+      const wrapped = next >= totalDur ? 0 : next;
+      canvasTimeRef.current = wrapped;
+      setCanvasTime(wrapped);
+      drawPreviewFrame(wrapped, true);
+      rafId = requestAnimationFrame(step);
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [previewVideoBroken, canvasPlaying, selectedDemo?.id]);
 
   return (
     <div className="min-h-screen bg-[#050711] text-slate-100 overflow-x-hidden">
@@ -516,23 +584,88 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               <div className="font-semibold text-slate-200 pb-1 border-b border-white/10">
                 Transcript · Scenes · Speakers
               </div>
-              <div className="text-cyan-300 font-mono">00:00.0 · Elena Vance</div>
-              <p className="text-slate-300">Welcome everyone to the NovaPulse AI launch keynote...</p>
-              <div className="text-violet-300 font-mono pt-1">00:21.4 · Demonstration</div>
-              <p className="text-slate-300">Now watch this live AI product demonstration...</p>
+              {selectedDemo?.id === 'demo-keynote' || !selectedDemo ? (
+                <>
+                  <div className="text-cyan-300 font-mono">00:00.0 · Elena Vance</div>
+                  <p className="text-slate-300">Welcome everyone to the NovaPulse AI launch keynote...</p>
+                  <div className="text-violet-300 font-mono pt-1">00:21.4 · Demonstration</div>
+                  <p className="text-slate-300">Now watch this live AI product demonstration...</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-cyan-300 font-mono truncate">
+                    {selectedDemo.category} · {selectedDemo.durationSec.toFixed(1)}s
+                  </div>
+                  <p className="text-slate-200 font-medium">{selectedDemo.title}</p>
+                  <div className="text-violet-300 font-mono pt-1">
+                    {selectedDemo.topics.slice(0, 2).join(' · ')}
+                  </div>
+                  <p className="text-slate-400 line-clamp-3">{selectedDemo.description}</p>
+                </>
+              )}
             </div>
 
-            <div className="lg:col-span-6 rounded-lg border border-white/10 bg-black overflow-hidden relative aspect-video">
+            <div className="lg:col-span-6 rounded-lg border border-white/10 bg-[#060914] overflow-hidden relative aspect-video">
               {selectedDemo ? (
-                <video
-                  key={selectedDemo.id}
-                  src={apiUrl(selectedDemo.mediaUrl)}
-                  poster={apiUrl(selectedDemo.thumbnailUrl)}
-                  controls
-                  playsInline
-                  preload="none"
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  {!previewVideoBroken ? (
+                    <video
+                      key={selectedDemo.id}
+                      src={apiUrl(selectedDemo.mediaUrl)}
+                      poster={getBundledThumbForDemo(selectedDemo.id)}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      onError={() => setPreviewVideoBroken(true)}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="relative w-full h-full flex items-center justify-center bg-[#060914]">
+                      <img
+                        src={getBundledThumbForDemo(selectedDemo.id)}
+                        alt={selectedDemo.title}
+                        className="absolute inset-0 w-full h-full object-cover opacity-90"
+                      />
+                      <canvas
+                        ref={previewCanvasRef}
+                        width={640}
+                        height={360}
+                        className="relative z-10 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setCanvasPlaying((p) => !p)}
+                          aria-label={canvasPlaying ? 'Pause preview' : 'Play preview'}
+                          className="inline-flex items-center gap-1 rounded-lg bg-cyan-500 px-2.5 py-1 text-[11px] font-bold text-slate-950 hover:bg-cyan-400 cursor-pointer shrink-0"
+                        >
+                          {canvasPlaying ? (
+                            <>
+                              <Pause className="w-3 h-3" /> Pause
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3" /> Play
+                            </>
+                          )}
+                        </button>
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.max(1, selectedDemo.durationSec || 24)}
+                          step={0.1}
+                          value={canvasTime}
+                          onChange={(e) => setCanvasTime(parseFloat(e.target.value))}
+                          aria-label="Preview scrub slider"
+                          className="studio-range flex-1 cursor-pointer"
+                        />
+                        <span className="font-mono text-[11px] tabular-nums text-slate-200 shrink-0">
+                          {canvasTime.toFixed(1)}s / {(selectedDemo.durationSec || 24).toFixed(1)}s
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : null}
             </div>
 
@@ -579,7 +712,13 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               <div>
                 <div className="relative aspect-video bg-slate-950">
                   <img
-                    src={apiUrl(demo.thumbnailUrl)}
+                    src={demo.thumbnailUrl ? apiUrl(demo.thumbnailUrl) : getBundledThumbForDemo(demo.id)}
+                    onError={(e) => {
+                      const fallbackSrc = getBundledThumbForDemo(demo.id);
+                      if (e.currentTarget.src !== fallbackSrc) {
+                        e.currentTarget.src = fallbackSrc;
+                      }
+                    }}
                     alt={demo.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"

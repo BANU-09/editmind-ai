@@ -27,6 +27,7 @@ import type {
 } from '../shared/types';
 import { formatTimecode } from '../shared/timelineEngine';
 import { api, apiUrl } from '../lib/api';
+import { downloadCaptionsFile } from '../lib/clientFallback';
 
 /* ------------------------------------------------------------------ */
 /* 1. FAST VIDEO CONTENT SEARCH MODAL                                 */
@@ -554,6 +555,7 @@ interface ExportModalProps {
   projectId: string;
   projectTitle: string;
   state: ProjectState;
+  analysis?: MediaAnalysis;
   sourceWidth?: number;
   sourceHeight?: number;
   activeTranslationLang?: string | null;
@@ -574,6 +576,7 @@ export function ExportModal({
   projectId,
   projectTitle,
   state,
+  analysis,
   sourceWidth,
   sourceHeight,
   activeTranslationLang,
@@ -717,97 +720,148 @@ export function ExportModal({
             </div>
           )}
 
-          {job?.status === 'completed' && job.outputUrl && (
-            <div className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Validated MP4 Export Ready
-                </span>
-                <span className="font-mono text-slate-200">
-                  Duration: {job.durationSec?.toFixed(2)}s ·{' '}
-                  {((job.fileSizeBytes || 0) / 1024).toFixed(0)} KB
-                </span>
-              </div>
+          {job?.status === 'completed' && job.outputUrl && (() => {
+            const isBlobOut = job.outputUrl.startsWith('blob:');
+            const resolvedOut = isBlobOut ? job.outputUrl : apiUrl(job.outputUrl);
+            const downloadHref = isBlobOut ? job.outputUrl : apiUrl(`${job.outputUrl}?dl=1`);
+            const safeSlug = projectTitle.replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'editmind-export';
+            const fallbackAnalysis = analysis || ({ transcript: [], translationTracks: {} } as unknown as MediaAnalysis);
+            return (
+              <div className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-300">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isBlobOut ? 'Validated WebM Export Ready' : 'Validated MP4 Export Ready'}
+                  </span>
+                  <span className="font-mono text-slate-200">
+                    Duration: {job.durationSec?.toFixed(2)}s ·{' '}
+                    {((job.fileSizeBytes || 0) / 1024).toFixed(0)} KB
+                  </span>
+                </div>
 
-              <div className="w-full max-h-[340px] bg-black rounded-lg border border-white/10 flex items-center justify-center overflow-hidden">
-                <video
-                  src={apiUrl(job.outputUrl)}
-                  controls
-                  playsInline
-                  className="max-w-full max-h-[340px] object-contain"
-                />
-              </div>
+                <div className="w-full max-h-[340px] bg-black rounded-lg border border-white/10 flex items-center justify-center overflow-hidden">
+                  <video
+                    src={resolvedOut}
+                    controls
+                    playsInline
+                    className="max-w-full max-h-[340px] object-contain"
+                  />
+                </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2.5">
-                {state.captions.length > 0 && (
-                  <>
-                    <a
-                      href={apiUrl(
-                        `/api/projects/${projectId}/captions/export?format=srt${
-                          activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                        }`,
-                      )}
-                      download
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/25"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Download .SRT
-                    </a>
-                    <a
-                      href={apiUrl(
-                        `/api/projects/${projectId}/captions/export?format=vtt${
-                          activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                        }`,
-                      )}
-                      download
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-400/40 bg-violet-500/15 px-4 py-2.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/25"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Download .VTT
-                    </a>
-                  </>
-                )}
-                <a
-                  href={apiUrl(`${job.outputUrl}?dl=1`)}
-                  download
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-400"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Rendered MP4
-                </a>
+                <div className="flex flex-wrap items-center justify-end gap-2.5">
+                  {state.captions.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void downloadCaptionsFile(
+                            projectId,
+                            state,
+                            fallbackAnalysis,
+                            'srt',
+                            activeTranslationLang,
+                            apiUrl(
+                              `/api/projects/${projectId}/captions/export?format=srt${
+                                activeTranslationLang
+                                  ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                                  : ''
+                              }`,
+                            ),
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/25 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download .SRT
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void downloadCaptionsFile(
+                            projectId,
+                            state,
+                            fallbackAnalysis,
+                            'vtt',
+                            activeTranslationLang,
+                            apiUrl(
+                              `/api/projects/${projectId}/captions/export?format=vtt${
+                                activeTranslationLang
+                                  ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                                  : ''
+                              }`,
+                            ),
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-violet-400/40 bg-violet-500/15 px-4 py-2.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/25 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download .VTT
+                      </button>
+                    </>
+                  )}
+                  <a
+                    href={downloadHref}
+                    download={isBlobOut ? `${safeSlug}.webm` : true}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-400"
+                  >
+                    <Download className="w-4 h-4" />
+                    {isBlobOut ? 'Download Rendered WebM' : 'Download Rendered MP4'}
+                  </a>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {(!job || job.status === 'failed') && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               {state.captions.length > 0 ? (
                 <div className="flex items-center gap-2">
-                  <a
-                    href={apiUrl(
-                      `/api/projects/${projectId}/captions/export?format=srt${
-                        activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                      }`,
-                    )}
-                    download
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-cyan-200 hover:border-cyan-400/50"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void downloadCaptionsFile(
+                        projectId,
+                        state,
+                        analysis || ({ transcript: [], translationTracks: {} } as unknown as MediaAnalysis),
+                        'srt',
+                        activeTranslationLang,
+                        apiUrl(
+                          `/api/projects/${projectId}/captions/export?format=srt${
+                            activeTranslationLang
+                              ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                              : ''
+                          }`,
+                        ),
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-cyan-200 hover:border-cyan-400/50 cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export .SRT
-                  </a>
-                  <a
-                    href={apiUrl(
-                      `/api/projects/${projectId}/captions/export?format=vtt${
-                        activeTranslationLang ? `&lang=${encodeURIComponent(activeTranslationLang)}` : ''
-                      }`,
-                    )}
-                    download
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-violet-200 hover:border-violet-400/50"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void downloadCaptionsFile(
+                        projectId,
+                        state,
+                        analysis || ({ transcript: [], translationTracks: {} } as unknown as MediaAnalysis),
+                        'vtt',
+                        activeTranslationLang,
+                        apiUrl(
+                          `/api/projects/${projectId}/captions/export?format=vtt${
+                            activeTranslationLang
+                              ? `&lang=${encodeURIComponent(activeTranslationLang)}`
+                              : ''
+                          }`,
+                        ),
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-violet-200 hover:border-violet-400/50 cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export .VTT
-                  </a>
+                  </button>
                 </div>
               ) : (
                 <div />
