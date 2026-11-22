@@ -9,18 +9,22 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import type { ProjectState, TranslationTrack } from '../shared/types';
+import type { MediaAnalysis, ProjectState, TranslationTrack } from '../shared/types';
 import {
   formatTimecode,
   getActiveCaptionAtTime,
   mapTimelineTimeToSource,
   projectCaptionsToTimeline,
 } from '../shared/timelineEngine';
+import { ProceduralMusicBed, unlockAudioEngine } from '../lib/audioEngine';
+import { getNarrationPosition } from '../lib/fallbackData';
 import { apiUrl } from '../lib/api';
 import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
 
 interface VirtualVideoPlayerProps {
   mediaUrl: string;
+  demoAudioUrl?: string;
+  demoAnalysis?: MediaAnalysis;
   posterUrl?: string;
   mediaFilename: string;
   mediaWidth: number;
@@ -36,6 +40,8 @@ interface VirtualVideoPlayerProps {
 
 export function VirtualVideoPlayer({
   mediaUrl,
+  demoAudioUrl,
+  demoAnalysis,
   posterUrl,
   mediaFilename,
   mediaWidth,
@@ -49,6 +55,8 @@ export function VirtualVideoPlayer({
   onToggleCaptions,
 }: VirtualVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const narrationRef = useRef<HTMLAudioElement | null>(null);
+  const bedRef = useRef<ProceduralMusicBed | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const posterImgRef = useRef<HTMLImageElement | null>(null);
@@ -61,7 +69,8 @@ export function VirtualVideoPlayer({
 
   const [globalSpeedMult, setGlobalSpeedMult] = useState(1);
   const [volume, setVolume] = useState(1);
-  const [videoFailed, setVideoFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(!mediaUrl);
+  const [playError, setPlayError] = useState('');
   const [posterVersion, setPosterVersion] = useState(0);
   const [naturalDims, setNaturalDims] = useState<{ w: number; h: number }>({
     w: Math.max(1, mediaWidth || 1280),
@@ -77,6 +86,7 @@ export function VirtualVideoPlayer({
 
   useEffect(() => {
     setVideoFailed(!mediaUrl);
+    setPlayError('');
     const resolvedPoster =
       posterUrl ||
       getBundledThumbForDemo(
@@ -144,9 +154,8 @@ export function VirtualVideoPlayer({
 
     try {
       if (!bleepCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
+        const ctx = unlockAudioEngine();
+        if (!ctx) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -174,7 +183,8 @@ export function VirtualVideoPlayer({
     return () => {
       try {
         bleepOscRef.current?.stop();
-        void bleepCtxRef.current?.close();
+        bleepGainRef.current?.disconnect();
+        bedRef.current?.dispose();
       } catch {
         // Ignore cleanup errors
       }
@@ -183,11 +193,13 @@ export function VirtualVideoPlayer({
 
   // Sync underlying HTML5 <video> element position, playbackRate, and audio state
   useEffect(() => {
-    const vid = videoRef.current;
+    const vid = videoFailed ? narrationRef.current : videoRef.current;
     if (!vid || !mapped) return;
 
     const { segment, sourceTime } = mapped;
-    const effectiveSpeed = Math.min(4, Math.max(0.25, (segment.speed || 1) * globalSpeedMult));
+    const position = videoFailed && demoAnalysis
+      ? getNarrationPosition(demoAnalysis, sourceTime) : { time: sourceTime, rate: 1 };
+    const effectiveSpeed = Math.min(16, Math.max(0.0625, (segment.speed || 1) * globalSpeedMult * position.rate));
     if (Math.abs(vid.playbackRate - effectiveSpeed) > 0.02) {
       vid.playbackRate = effectiveSpeed;
     }
@@ -202,15 +214,17 @@ export function VirtualVideoPlayer({
     vid.muted = shouldMute;
     vid.volume = Math.min(1, Math.max(0, volume * segment.volume * state.audio.masterVolume));
 
-    if (Math.abs(vid.currentTime - sourceTime) > 0.25) {
+    if (Math.abs(vid.currentTime - position.time) > 0.18) {
       try {
-        vid.currentTime = sourceTime;
+        vid.currentTime = position.time;
       } catch {
         // Ignore seek before metadata loaded
       }
     }
   }, [
     mapped,
+    videoFailed,
+    demoAnalysis,
     state.audio,
     state.trackVisibility.audio,
     globalSpeedMult,
@@ -219,44 +233,49 @@ export function VirtualVideoPlayer({
     inMuteRangeNow,
   ]);
 
-  // Play / Pause control on <video> and synced custom music audio track
+  const customMusicUrl = state.audio.musicPreset === 'custom-upload' ? state.audio.customMusicUrl : undefined;
+  const musicActive = isPlaying && state.audio.musicEnabled && state.trackVisibility.music && !state.audio.muted;
   useEffect(() => {
-    const vid = videoRef.current;
-    const musicEl = musicAudioRef.current;
-
-    if (vid) {
-      if (isPlaying) {
-        void vid.play().catch(() => {});
-      } else {
-        vid.pause();
-      }
+    if (musicActive && state.audio.musicPreset !== 'custom-upload') {
+      bedRef.current ??= new ProceduralMusicBed();
+      bedRef.current.update({ active: true, preset: state.audio.musicPreset, volume: volume * state.audio.musicVolume });
+    } else {
+      bedRef.current?.stop();
     }
+  }, [musicActive, volume, state.audio.musicVolume, state.audio.musicPreset]);
 
-    if (musicEl && state.audio.customMusicUrl) {
-      musicEl.volume = Math.min(1, Math.max(0, state.audio.musicVolume * volume));
-      musicEl.muted = !state.audio.musicEnabled || !state.trackVisibility.music || state.audio.muted;
-      if (isPlaying && state.audio.musicEnabled && state.trackVisibility.music) {
-        const targetOffset = (state.audio.musicStartOffsetSec || 0) + currentTime;
-        if (Math.abs(musicEl.currentTime - targetOffset) > 0.4 && Number.isFinite(musicEl.duration)) {
-          musicEl.currentTime = targetOffset % Math.max(1, musicEl.duration);
-        }
-        void musicEl.play().catch(() => {});
-      } else {
-        musicEl.pause();
-      }
+  useEffect(() => {
+    const music = musicAudioRef.current;
+    if (!music) return;
+    music.volume = Math.min(1, state.audio.musicVolume * volume);
+    music.playbackRate = globalSpeedMult;
+    if (Number.isFinite(music.duration) && music.duration > 0) {
+      const offset = ((state.audio.musicStartOffsetSec || 0) + currentTime) % music.duration;
+      if (Math.abs(music.currentTime - offset) > 0.25) music.currentTime = offset;
     }
-  }, [
-    isPlaying,
-    mediaUrl,
-    state.audio.customMusicUrl,
-    state.audio.musicEnabled,
-    state.audio.musicVolume,
-    state.audio.musicStartOffsetSec,
-    state.audio.muted,
-    state.trackVisibility.music,
-    volume,
-    currentTime,
-  ]);
+  }, [customMusicUrl, state.audio.musicVolume, volume, globalSpeedMult, state.audio.musicStartOffsetSec, currentTime]);
+
+  useEffect(() => {
+    const music = musicAudioRef.current;
+    if (!music) return;
+    if (musicActive) void music.play().catch(err => {
+      if (err.name !== 'AbortError') setPlayError('The background music could not be played.');
+    });
+    else music.pause();
+  }, [customMusicUrl, musicActive]);
+
+  useEffect(() => {
+    const source = videoFailed ? narrationRef.current : videoRef.current;
+    let active = true;
+    if (isPlaying && source) {
+      void source.play().catch(err => {
+        if (!active || err.name === 'AbortError' || (source === videoRef.current && demoAudioUrl && source.error)) return;
+        onPlayingChange(false);
+        setPlayError('Playback could not start. Check the media file and press Play again.');
+      });
+    } else source?.pause();
+    return () => { active = false; };
+  }, [isPlaying, videoFailed, mediaUrl, demoAudioUrl, onPlayingChange]);
 
   // Virtual timeline driver advancing currentTime across cuts, reorders, and speed changes
   const stateRef = useRef(state);
@@ -495,8 +514,10 @@ export function VirtualVideoPlayer({
       </div>
 
       {/* Hidden synced audio element for custom uploaded music bed */}
-      {state.audio.customMusicUrl && (
-        <audio ref={musicAudioRef} src={apiUrl(state.audio.customMusicUrl)} loop preload="auto" />
+      {videoFailed && demoAudioUrl && <audio ref={narrationRef} src={demoAudioUrl} preload="auto" />}
+      {playError && <p role="alert" className="px-4 py-1 text-xs text-amber-200">{playError}</p>}
+      {customMusicUrl && (
+        <audio ref={musicAudioRef} src={apiUrl(customMusicUrl)} loop preload="auto" />
       )}
 
       {/* Playback Controls Strictly BELOW Video Frame */}
@@ -537,7 +558,23 @@ export function VirtualVideoPlayer({
             <button
               type="button"
               aria-label={isPlaying ? 'Pause video' : 'Play video'}
-              onClick={() => onPlayingChange(!isPlaying)}
+              onClick={() => {
+                setPlayError('');
+                if (!isPlaying) {
+                  if (videoFailed && !narrationRef.current) {
+                    setPlayError('The source media is unavailable. Reopen the original file to play it.');
+                    return;
+                  }
+                  unlockAudioEngine();
+                  // Start inside the gesture for browsers that gate unmuted media playback.
+                  const source = videoFailed ? narrationRef.current : videoRef.current;
+                  void source?.play().catch(() => {});
+                  if (state.audio.musicEnabled && state.trackVisibility.music && !state.audio.muted) {
+                    void musicAudioRef.current?.play().catch(() => {});
+                  }
+                }
+                onPlayingChange(!isPlaying);
+              }}
               className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-cyan-400 cursor-pointer"
             >
               {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -546,7 +583,7 @@ export function VirtualVideoPlayer({
 
             <button
               type="button"
-              aria-label={state.audio.muted ? 'Unmute audio' : 'Mute audio'}
+              aria-label={volume === 0 ? 'Unmute preview audio' : 'Mute preview audio'}
               onClick={() => setVolume((v) => (v === 0 ? 1 : 0))}
               className="rounded-lg border border-white/10 bg-slate-900 p-1.5 text-slate-300 hover:text-white cursor-pointer"
             >

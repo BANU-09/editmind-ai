@@ -26,6 +26,7 @@ import {
   deterministicPlan,
   finalizePlanWithSafety,
 } from '../shared/deterministicPlanner';
+import { createBrowserExportAudio } from './browserExportAudio';
 import { getBundledThumbForDemo, renderDemoCanvasFrame } from './demoAssets';
 import {
   buildFallbackDemoProject,
@@ -628,6 +629,9 @@ async function runBrowserCanvasExport(
     if (cur) fallbackExportJobs.set(jobId, { ...cur, ...patch });
   };
 
+  let mix: ReturnType<typeof createBrowserExportAudio> | undefined;
+  let stream: MediaStream | undefined;
+  let recorder: MediaRecorder | undefined;
   try {
     setJob({ status: 'rendering', progress: 10 });
     const dims = resolveCanvasDims(resolution, project.media?.width, project.media?.height);
@@ -641,121 +645,94 @@ async function runBrowserCanvasExport(
       project.media?.thumbnailUrl ||
       project.thumbnailUrl ||
       getBundledThumbForDemo(project.mediaId);
-    const posterImg = await loadImage(thumbUrl);
+    const posterPromise = loadImage(thumbUrl);
     const projectedCaps = projectCaptionsToTimeline(state);
 
     if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
-      // Headless/minimal browser fallback: export thumbnail preview frame if MediaRecorder unavailable
-      renderDemoCanvasFrame(ctx, {
-        width: dims.width,
-        height: dims.height,
-        image: posterImg,
-        sourceTime: 0,
-        duration: state.duration,
-        topic: state.segments[0]?.label,
-        speaker: state.segments[0]?.speaker,
-        isPlaying: true,
-        captionText: projectedCaps[0]?.text,
-        captionColor: state.captionStyle.color,
-      });
-      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
-      const url = blob ? URL.createObjectURL(blob) : thumbUrl;
-      setJob({
-        status: 'completed',
-        progress: 100,
-        outputUrl: url,
-        durationSec: state.duration,
-        fileSizeBytes: blob?.size || 45_000,
-      });
-      return;
+      throw new Error('This browser cannot record video and audio. Open the editor in a browser with MediaRecorder support.');
     }
-
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-      ? 'video/webm;codecs=vp8'
-      : MediaRecorder.isTypeSupported('video/webm')
-        ? 'video/webm'
-        : '';
-    const stream = canvas.captureStream(24);
-    const recorder = mimeType
-      ? new MediaRecorder(stream, { mimeType })
-      : new MediaRecorder(stream);
+    const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) throw new Error('This browser cannot export WebM with audio.');
+    mix = createBrowserExportAudio(project, state);
+    await mix.prepare();
+    const posterImg = await posterPromise;
+    stream = canvas.captureStream(24);
+    for (const track of mix.stream.getAudioTracks()) stream.addTrack(track);
+    const recording = new MediaRecorder(stream, { mimeType });
+    recorder = recording;
     const chunks: BlobPart[] = [];
-    recorder.ondataavailable = (ev) => {
+    recording.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) chunks.push(ev.data);
     };
 
     const donePromise = new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
+      recording.onstop = () => {
         resolve(new Blob(chunks, { type: mimeType || 'video/webm' }));
       };
     });
 
+    await mix.start();
     recorder.start(200);
 
-    // Render smoothly over up to 6s wall-clock preview covering the full edited timeline
-    const timelineDur = Math.max(1, state.duration);
-    const renderWallMs = Math.min(6000, Math.max(2400, timelineDur * 180));
+    // Record in real time so speech, cuts and captions keep the same clock.
+    const timelineDur = Math.max(0.05, state.duration);
+    const renderWallMs = timelineDur * 1000;
     const startedAt = performance.now();
 
-    await new Promise<void>((resolve) => {
-      const tick = () => {
-        const elapsed = performance.now() - startedAt;
-        const frac = Math.min(1, elapsed / renderWallMs);
-        const tlTime = frac * timelineDur;
-        const mapped = mapTimelineTimeToSource(state.segments, tlTime);
-        const cap = getActiveCaptionAtTime(projectedCaps, tlTime);
+    while (true) {
+      const elapsed = performance.now() - startedAt;
+      const frac = Math.min(1, elapsed / renderWallMs);
+      const tlTime = frac * timelineDur;
+      if (recording.state === 'inactive') throw new Error('The browser stopped recording early.');
+      await mix.sync(tlTime, true);
+      const mapped = mapTimelineTimeToSource(state.segments, tlTime);
+      const cap = getActiveCaptionAtTime(projectedCaps, tlTime);
 
-        renderDemoCanvasFrame(ctx, {
-          width: dims.width,
-          height: dims.height,
-          image: posterImg,
-          sourceTime: mapped?.sourceTime ?? tlTime,
-          duration: timelineDur,
-          topic: mapped?.segment.topic || mapped?.segment.label,
-          speaker: mapped?.segment.speaker,
-          isPlaying: true,
-          captionText: cap?.text,
-          captionColor: state.captionStyle.color,
-          opacity: state.trackVisibility.video ? 1 : 0.18,
-        });
+      renderDemoCanvasFrame(ctx, {
+        width: dims.width,
+        height: dims.height,
+        image: posterImg,
+        sourceTime: mapped?.sourceTime ?? tlTime,
+        duration: timelineDur,
+        topic: mapped?.segment.topic || mapped?.segment.label,
+        speaker: mapped?.segment.speaker,
+        isPlaying: true,
+        captionText: cap?.text,
+        captionColor: state.captionStyle.color,
+        opacity: state.trackVisibility.video ? 1 : 0.18,
+      });
 
-        // Draw active text overlays onto exported canvas
-        if (state.trackVisibility.overlays) {
-          for (const ov of state.overlays) {
-            if (tlTime >= ov.timelineStart && tlTime <= ov.timelineEnd) {
-              ctx.save();
-              const fontPx = Math.max(14, Math.round(ov.fontSize * (dims.height / 720)));
-              ctx.font = `700 ${fontPx}px "Plus Jakarta Sans", Inter, system-ui, sans-serif`;
-              const tx = (ov.x / 100) * dims.width;
-              const ty = (ov.y / 100) * dims.height;
-              const tw = ctx.measureText(ov.text).width + 24;
-              const th = fontPx + 18;
-              ctx.fillStyle = ov.backgroundColor || 'rgba(236, 72, 153, 0.85)';
-              ctx.fillRect(tx - tw / 2, ty - th / 2, tw, th);
-              ctx.fillStyle = ov.color || '#FFFFFF';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(ov.text, tx, ty);
-              ctx.restore();
-            }
+      // Draw active text overlays onto exported canvas
+      if (state.trackVisibility.overlays) {
+        for (const ov of state.overlays) {
+          if (tlTime >= ov.timelineStart && tlTime <= ov.timelineEnd) {
+            ctx.save();
+            const fontPx = Math.max(14, Math.round(ov.fontSize * (dims.height / 720)));
+            ctx.font = `700 ${fontPx}px "Plus Jakarta Sans", Inter, system-ui, sans-serif`;
+            const tx = (ov.x / 100) * dims.width;
+            const ty = (ov.y / 100) * dims.height;
+            const tw = ctx.measureText(ov.text).width + 24;
+            const th = fontPx + 18;
+            ctx.fillStyle = ov.backgroundColor || 'rgba(236, 72, 153, 0.85)';
+            ctx.fillRect(tx - tw / 2, ty - th / 2, tw, th);
+            ctx.fillStyle = ov.color || '#FFFFFF';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ov.text, tx, ty);
+            ctx.restore();
           }
         }
+      }
 
-        setJob({ progress: Math.min(92, 12 + Math.round(frac * 80)) });
+      setJob({ progress: Math.min(92, 12 + Math.round(frac * 80)) });
 
-        if (frac < 1) {
-          window.setTimeout(tick, 42);
-        } else {
-          resolve();
-        }
-      };
-      tick();
-    });
+      if (frac >= 1) break;
+      await new Promise(resolve => window.setTimeout(resolve, 42));
+    }
 
     setJob({ status: 'validating', progress: 96 });
     recorder.stop();
     const outBlob = await donePromise;
-    stream.getTracks().forEach((t) => t.stop());
 
     const outUrl = URL.createObjectURL(outBlob);
     setJob({
@@ -771,6 +748,10 @@ async function runBrowserCanvasExport(
       progress: 0,
       error: err instanceof Error ? err.message : 'Browser WebM export failed.',
     });
+  } finally {
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    stream?.getTracks().forEach(track => track.stop());
+    mix?.dispose();
   }
 }
 
@@ -781,6 +762,7 @@ export function fallbackStartExport(
   quality: ExportJob['quality'],
 ): { job: ExportJob } {
   const { project } = fallbackGetProject(projectId);
+  if (project.id !== projectId) throw new Error('Open the source project again before exporting.');
   const jobId = `exp-local-${Date.now().toString(36)}`;
   const job: ExportJob = {
     id: jobId,

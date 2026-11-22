@@ -48,6 +48,8 @@ import {
 } from '../shared/timelineEngine';
 import { api, apiUrl, type HydratedProject, type LanguageOption } from '../lib/api';
 import { downloadCaptionsFile } from '../lib/clientFallback';
+import { getBundledAudioForDemo } from '../lib/audioEngine';
+import { getNarrationPosition } from '../lib/fallbackData';
 import { VirtualVideoPlayer } from './VirtualVideoPlayer';
 import { TimelinePanel } from './TimelinePanel';
 import {
@@ -585,11 +587,19 @@ function WorkspaceInner({
     }
   };
 
+  const localProject = project.id.startsWith('proj-local-');
+  const localDemoAudio = localProject && media.sourceType === 'demo'
+    ? getBundledAudioForDemo(media.id) : undefined;
+  const snippetMedia = localDemoAudio || (localProject ? media.url : undefined);
+  const snippetTime = (time: number) => localDemoAudio ? getNarrationPosition(analysis, time).time : time;
+  const snippetStart = selectedWord && snippetMedia ? snippetTime(selectedWord.word.start) : 0;
+  const snippetEnd = selectedWord && snippetMedia ? snippetTime(selectedWord.word.end) : undefined;
+
   const handleReplaySnippet = () => {
     const el = snippetAudioRef.current;
     if (!el) return;
-    el.currentTime = 0;
-    void el.play().catch(() => {});
+    el.currentTime = snippetStart;
+    void el.play().catch(() => setWordEditError('The browser could not play this audio snippet.'));
   };
 
   const handleTranslateCaptions = async (langCode: string) => {
@@ -1074,7 +1084,7 @@ function WorkspaceInner({
             className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-500 via-blue-600 to-violet-600 px-3.5 py-1.5 text-xs font-bold text-white hover:brightness-110 cursor-pointer"
           >
             <Film className="w-3.5 h-3.5" />
-            Export MP4
+            Export {localProject ? 'WebM' : 'MP4'}
           </button>
         </div>
       </header>
@@ -1473,7 +1483,11 @@ function WorkspaceInner({
                       ref={snippetAudioRef}
                       controls
                       preload="none"
-                      src={api.getAudioSnippetUrl(
+                      key={selectedWord.word.id}
+                      onTimeUpdate={e => {
+                        if (snippetEnd !== undefined && e.currentTarget.currentTime >= snippetEnd) e.currentTarget.pause();
+                      }}
+                      src={snippetMedia ? `${snippetMedia}#t=${snippetStart},${snippetEnd}` : api.getAudioSnippetUrl(
                         media.id,
                         selectedWord.word.start,
                         selectedWord.word.end,
@@ -1777,7 +1791,9 @@ function WorkspaceInner({
         {/* 3. CENTER COLUMN (>= 50% width): LARGE VIDEO PREVIEW + SETTINGS STRIP BELOW */}
         <main className="lg:col-span-6 p-4 flex flex-col justify-between gap-3 bg-[#050711]">
           <VirtualVideoPlayer
-            mediaUrl={apiUrl(media.url)}
+            mediaUrl={localDemoAudio ? '' : apiUrl(media.url)}
+            demoAudioUrl={media.sourceType === 'demo' ? getBundledAudioForDemo(media.id) : undefined}
+            demoAnalysis={localDemoAudio ? analysis : undefined}
             posterUrl={apiUrl(media.thumbnailUrl)}
             mediaFilename={media.filename}
             mediaWidth={media.width}

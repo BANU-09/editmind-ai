@@ -610,13 +610,15 @@ export function ExportModal({
     }
   };
 
+  const browserExport = projectId.startsWith('proj-local-');
+  const format = browserExport ? 'WebM' : 'MP4';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
       <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-[#0B1022] overflow-hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <div className="flex items-center gap-2">
             <Film className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-base font-bold text-white">Export Edited MP4 ({projectTitle})</h2>
+            <h2 className="text-base font-bold text-white">Export Edited {format} ({projectTitle})</h2>
           </div>
           <button
             type="button"
@@ -689,7 +691,7 @@ export function ExportModal({
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-cyan-300 capitalize">
-                  {job.status === 'validating'
+                  {browserExport ? 'Recording the edited timeline with audio…' : job.status === 'validating'
                     ? 'Validating output MP4 with FFprobe...'
                     : 'Rendering timeline cuts, speed, audio & captions via FFmpeg...'}
                 </span>
@@ -731,7 +733,7 @@ export function ExportModal({
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="flex items-center gap-1.5 font-semibold text-emerald-300">
                     <CheckCircle2 className="w-4 h-4" />
-                    {isBlobOut ? 'Validated WebM Export Ready' : 'Validated MP4 Export Ready'}
+                    {isBlobOut ? 'WebM Export Ready' : 'Validated MP4 Export Ready'}
                   </span>
                   <span className="font-mono text-slate-200">
                     Duration: {job.durationSec?.toFixed(2)}s ·{' '}
@@ -872,7 +874,7 @@ export function ExportModal({
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-violet-600 px-6 py-2.5 text-sm font-semibold text-white hover:brightness-110 cursor-pointer"
               >
                 <Play className="w-4 h-4" />
-                Render Final MP4
+                Render Final {format}
               </button>
             </div>
           )}

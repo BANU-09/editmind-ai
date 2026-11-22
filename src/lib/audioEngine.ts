@@ -87,6 +87,8 @@ const PRESET_CHORDS: Record<SynthMusicPreset, { bpm: number; filterHz: number; c
 };
 
 export class ProceduralMusicBed {
+  constructor(private readonly output?: AudioNode) {}
+
   private masterGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
   private stepTimer: number | null = null;
@@ -107,7 +109,7 @@ export class ProceduralMusicBed {
         this.masterGain.gain.value = 0;
 
         this.filter.connect(this.masterGain);
-        this.masterGain.connect(ctx.destination);
+        this.masterGain.connect(this.output ?? ctx.destination);
       } catch {
         return false;
       }
@@ -234,5 +236,12 @@ export class ProceduralMusicBed {
         // Ignore
       }
     }
+  }
+
+  public dispose() {
+    this.stop();
+    this.filter?.disconnect();
+    this.masterGain?.disconnect();
+    this.filter = this.masterGain = null;
   }
 }

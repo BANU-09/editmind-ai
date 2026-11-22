@@ -5,7 +5,6 @@ import {
   Check,
   Film,
   Layers,
-  Pause,
   Play,
   Search,
   ShieldAlert,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiUrl, type DemoCatalogItem } from '../lib/api';
 import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
+import { getBundledAudioForDemo } from '../lib/audioEngine';
 import { FALLBACK_DEMOS } from '../lib/fallbackData';
 import { ErrorBoundary } from './ErrorBoundary';
 import { HeroOrbCanvas } from './HeroOrbCanvas';
@@ -120,11 +120,9 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
 
   const [previewVideoBroken, setPreviewVideoBroken] = useState(false);
   const [canvasPlaying, setCanvasPlaying] = useState(false);
-  const [canvasTime, setCanvasTime] = useState(0);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewThumbImgRef = useRef<HTMLImageElement | null>(null);
-  const canvasTimeRef = useRef(0);
-  canvasTimeRef.current = canvasTime;
 
   const currentPrompt = PROMPT_EXAMPLES[activePromptIdx] || PROMPT_EXAMPLES[0];
   const currentVersion = VERSION_TABS[activeVersionIdx] || VERSION_TABS[0];
@@ -149,8 +147,6 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
   useEffect(() => {
     setPreviewVideoBroken(false);
     setCanvasPlaying(false);
-    setCanvasTime(0);
-    canvasTimeRef.current = 0;
     if (!selectedDemo) return;
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -162,30 +158,16 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
   }, [selectedDemo?.id]);
 
   useEffect(() => {
-    if (!previewVideoBroken || !selectedDemo) return;
-    drawPreviewFrame(canvasTimeRef.current, canvasPlaying);
-    if (!canvasPlaying) return;
-
-    let rafId = 0;
-    let lastTs = performance.now();
-    const totalDur = Math.max(5, selectedDemo.durationSec || 24);
-
-    const step = (now: number) => {
-      const dt = Math.min(0.1, (now - lastTs) / 1000);
-      lastTs = now;
-      const next = canvasTimeRef.current + dt;
-      const wrapped = next >= totalDur ? 0 : next;
-      canvasTimeRef.current = wrapped;
-      setCanvasTime(wrapped);
-      drawPreviewFrame(wrapped, true);
-      rafId = requestAnimationFrame(step);
+    const audio = previewAudioRef.current;
+    if (!audio) return;
+    let frame = 0;
+    const draw = () => {
+      drawPreviewFrame(audio.currentTime, canvasPlaying);
+      if (canvasPlaying) frame = requestAnimationFrame(draw);
     };
-
-    rafId = requestAnimationFrame(step);
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [previewVideoBroken, canvasPlaying, selectedDemo?.id]);
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [previewVideoBroken, canvasPlaying, selectedDemo?.id, selectedDemo?.mediaUrl]);
 
   return (
     <div className="min-h-screen bg-[#050711] text-slate-100 overflow-x-hidden">
@@ -608,7 +590,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
             <div className="lg:col-span-6 rounded-lg border border-white/10 bg-[#060914] overflow-hidden relative aspect-video">
               {selectedDemo ? (
                 <>
-                  {!previewVideoBroken ? (
+                  {selectedDemo.mediaUrl && !previewVideoBroken ? (
                     <video
                       key={selectedDemo.id}
                       src={apiUrl(selectedDemo.mediaUrl)}
@@ -632,37 +614,18 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
                         height={360}
                         className="relative z-10 w-full h-full object-cover"
                       />
-                      <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => setCanvasPlaying((p) => !p)}
-                          aria-label={canvasPlaying ? 'Pause preview' : 'Play preview'}
-                          className="inline-flex items-center gap-1 rounded-lg bg-cyan-500 px-2.5 py-1 text-[11px] font-bold text-slate-950 hover:bg-cyan-400 cursor-pointer shrink-0"
-                        >
-                          {canvasPlaying ? (
-                            <>
-                              <Pause className="w-3 h-3" /> Pause
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-3 h-3" /> Play
-                            </>
-                          )}
-                        </button>
-                        <input
-                          type="range"
-                          min={0}
-                          max={Math.max(1, selectedDemo.durationSec || 24)}
-                          step={0.1}
-                          value={canvasTime}
-                          onChange={(e) => setCanvasTime(parseFloat(e.target.value))}
-                          aria-label="Preview scrub slider"
-                          className="studio-range flex-1 cursor-pointer"
-                        />
-                        <span className="font-mono text-[11px] tabular-nums text-slate-200 shrink-0">
-                          {canvasTime.toFixed(1)}s / {(selectedDemo.durationSec || 24).toFixed(1)}s
-                        </span>
-                      </div>
+                      <audio
+                        key={selectedDemo.id}
+                        ref={previewAudioRef}
+                        src={getBundledAudioForDemo(selectedDemo.id)}
+                        controls
+                        preload="metadata"
+                        aria-label="Demo narration"
+                        onPlay={() => setCanvasPlaying(true)}
+                        onPause={() => setCanvasPlaying(false)}
+                        onSeeked={e => drawPreviewFrame(e.currentTarget.currentTime, canvasPlaying)}
+                        className="absolute inset-x-0 bottom-0 z-20 w-full"
+                      />
                     </div>
                   )}
                 </>
