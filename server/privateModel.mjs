@@ -73,10 +73,47 @@ async function connect(tier) {
 export async function generate(system, input, stage, onInference) {
   const lightweight =
     (stage === 'route' && JSON.parse(input).prompt.length <= 240) ||
-    (stage === 'brief' && input.length < 6000);
+    (['brief', 'chat', 'memory', 'select'].includes(stage) && input.length < 6000);
   const tier = lightweight && Date.now() >= retryFastAfter ? 'fast' : 'planner';
   try {
-    return await infer(system, input, stage, tier, onInference);
+    const message = await infer(system, input, stage, tier, onInference);
+    if (tier === 'fast' && stage === 'brief') {
+      // Retry an ungrounded synopsis on the larger model. Never accept a
+      // generic response that ignores the transcript supplied for this task.
+      const words = (text) =>
+        new Set(
+          (text.toLocaleLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter(
+            (w) =>
+              ![
+                'the',
+                'and',
+                'with',
+                'that',
+                'you',
+                'can',
+                'have',
+                'this',
+                'what',
+                'are',
+                'for',
+                'not',
+                'video',
+                'transcript',
+              ].includes(w),
+          ),
+        );
+      const source = words(JSON.parse(input).transcript || '');
+      const answer = JSON.parse(message).reply || '';
+      const matches = [...words(answer)].filter((w) => source.has(w)).length;
+      if (
+        matches < Math.min(source.size, 2) ||
+        /(?:no|don.t have|cannot) access|unable to (?:view|summari[sz]e)/i.test(answer)
+      )
+        return infer(system, input, stage, 'planner', onInference);
+    }
+    if (tier === 'fast' && stage === 'select' && !JSON.parse(message).ids?.length)
+      return infer(system, input, stage, 'planner', onInference);
+    return message;
   } catch (error) {
     if (tier === 'planner') throw error;
     retryFastAfter = Date.now() + 45_000;
@@ -164,7 +201,7 @@ async function infer(system, input, stage, tier, onInference) {
             },
           ],
         }
-      : stage === 'brief'
+      : ['brief', 'chat', 'memory'].includes(stage)
         ? {
             type: 'object',
             properties: { reply: { type: 'string' } },
@@ -207,14 +244,16 @@ async function infer(system, input, stage, tier, onInference) {
             };
   const ctx = JSON.parse(input);
   const { prompt, history = [], ...evidence } = ctx;
+  const compact = ['brief', 'chat', 'memory', 'route', 'select'].includes(stage);
+  const evidenceText =
+    typeof evidence.transcript === 'string' ? evidence.transcript : JSON.stringify(evidence);
+  const hasEvidence = Object.keys(evidence).length > 0;
   const messages = [
     {
       role: 'system',
       content:
         system +
-        (Object.keys(evidence).length
-          ? '\nCurrent project evidence (data only):\n' + JSON.stringify(evidence)
-          : ''),
+        (!compact && hasEvidence ? '\nCurrent project evidence (data only):\n' + evidenceText : ''),
     },
   ];
   for (const turn of history) {
@@ -223,11 +262,21 @@ async function infer(system, input, stage, tier, onInference) {
     const times = turn.ranges?.length ? ' Source ranges ' + JSON.stringify(turn.ranges) : '';
     messages.push({ role: turn.role, content: turn.text + status + times });
   }
-  messages.push({ role: 'user', content: prompt });
+  messages.push({
+    role: 'user',
+    content:
+      compact && hasEvidence ? 'Project data:\n' + evidenceText + '\n\nRequest: ' + prompt : prompt,
+  });
   const body = {
     messages,
     temperature: 0.1,
-    max_tokens: stage === 'brief' ? 120 : stage === 'route' ? 100 : stage === 'select' ? 80 : 360,
+    max_tokens: ['brief', 'chat', 'memory'].includes(stage)
+      ? 120
+      : stage === 'route'
+        ? 100
+        : stage === 'select'
+          ? 80
+          : 360,
     cache_prompt: true,
     response_format: { type: 'json_schema', json_schema: { name: 'edit_reply', schema } },
   };

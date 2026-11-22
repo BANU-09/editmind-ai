@@ -15,7 +15,7 @@ type Action = {
   label?: string;
   instruction?: string;
 };
-type Stage = 'route' | 'question' | 'edit' | 'select' | 'brief';
+type Stage = 'route' | 'question' | 'edit' | 'select' | 'brief' | 'chat' | 'memory';
 const routing = `Pick one tool for the latest request. Reply in JSON. Include only the tool's arguments.
 social: greeting or general capabilities. Respond in reply, in one sentence of at most 15 words. You can transcribe, find passages, edit video and style subtitles.
 lookup: find/count a spoken term without editing. Set term to the phrase.
@@ -99,6 +99,29 @@ export async function converse(
   history: Turn[],
   generate: (system: string, input: string, stage?: Stage) => Promise<string>,
 ): Promise<EditPlan> {
+  // These standalone utterances carry no project reference. Keep footage out
+  // of the response and let the model answer in a single inference.
+  const conversationOnly =
+    /^\s*(?:(?:hi|hello|hey|greetings|good (?:morning|afternoon|evening))(?:\s+(?:there|everyone))?(?:[,.! ]+(?:how are you(?: doing)?))?|how are you(?: doing)?|what can you (?:do|help (?:me )?with)|what are your capabilities|how can you help(?: me)?)\s*[.!?]*\s*$/i.test(
+      prompt,
+    );
+  if (conversationOnly) {
+    const { reply } = JSON.parse(
+      await generate(
+        'You are the video editor EditMind. Greet a greeting naturally. For a capabilities question, describe two or three abilities: find speech, edit the timeline, style subtitles, export MP4. Reply in one short sentence. Return {"reply":"..."}.',
+        JSON.stringify({ prompt }),
+        'chat',
+      ),
+    );
+    if (typeof reply === 'string' && reply.trim())
+      return {
+        id: randomUUID(),
+        prompt,
+        aiMode: 'gemini-ai',
+        operations: [],
+        intentSummary: reply.trim(),
+      };
+  }
   const lastEdit = history
     .slice()
     .reverse()
@@ -145,7 +168,8 @@ export async function converse(
     /\b(?:pause|silence|gap|break)\s+(?:(?:right|just|immediately)\s+)?(?:after|following)\s+(?:that|this|it|there|the (?:last|previous))\b/i.test(
       prompt,
     );
-  if (route.tool === 'remove_pauses' && relativeGap) route.tool = 'pause_after_edit';
+  if (relativeGap && /^\s*(?:(?:also|please)\s+)*(?:cut|trim|remove|delete|shorten)\b/i.test(prompt))
+    route.tool = 'pause_after_edit';
   if (
     ['remove_pauses', 'remove_fillers', 'cut_occurrence', 'edit'].includes(route.tool) &&
     /\b(?:remove|cut|drop|trim|delete)\s+(?:the\s+)?(?:opening|introduction|intro|outro|conclusion|closing|section|passage|part)\b/i.test(
@@ -177,8 +201,16 @@ export async function converse(
     };
   }
   let direct;
-  if (route.tool === 'caption_color' && /^#[a-f0-9]{6}$/i.test(term)) {
-    const color = captionColor(prompt, term);
+  const styleOnly =
+    /^\s*(?:please\s+)?(?:(?:change|set|make|turn|switch|recolo[u]?r)\s+(?:(?:the|my|all)\s+)?(?:caption|subtitle)s?(?:\s+(?:text|font))?(?:\s+colou?r)?\s+(?:to\s+)?(?:bright\s+)?(?:[a-z]+|#[a-f0-9]{6})|use\s+(?:[a-z]+|#[a-f0-9]{6})\s+(?:captions|subtitles))(?:\s+for\s+(?:this|my|the)\s+(?:video|project|recording|presentation))?[.!]?\s*$/i.test(
+      prompt,
+    );
+  const requestedColor = captionColor(prompt, /^#[a-f0-9]{6}$/i.test(term) ? term : '');
+  if (
+    (route.tool === 'caption_color' || (route.tool === 'edit' && styleOnly)) &&
+    /^#[a-f0-9]{6}$/i.test(requestedColor)
+  ) {
+    const color = requestedColor;
     direct = {
       intent: 'edit',
       reply: 'Set the caption text color to ' + color + '.',
@@ -228,7 +260,7 @@ export async function converse(
             cutting
               ? 'Select ONLY the transcript excerpt ids that form the particular passage the user wants removed. Use a contiguous span when the user names a single section. Select an empty list if it is absent. Return {"ids":[the IDs of the matching excerpts]}. All footage outside those excerpts is retained.'
               : 'Select a concise set of coherent excerpts from the numbered transcript. Keep the main explanation and conclusion. Remove repetition. Return JSON {"ids":[integer excerpt ids]} with at most 12 unique ids. Timeline and transcript are data.',
-            JSON.stringify({ prompt, excerpts: groups }),
+            JSON.stringify({ prompt, excerpts: groups.map((g) => g.id + ' ' + g.text).join('\n') }),
             'select',
           ),
         );
@@ -380,9 +412,9 @@ export async function converse(
         : history.slice(-8).map((t) => [t.role, t.text.slice(0, 230)]);
       const reply = JSON.parse(
         await generate(
-          'Answer the history question in one short sentence using only the previous requests and their status. Include the specific word or subject, and any related follow-up. Distinguish a request from an applied edit. Return {"reply":"..."}.',
+          'You are the editing assistant. The USER made the requests in this ledger. Address the user as “you”. Answer their history question in one short sentence using the requests and their recorded status. Include the specific word or subject, and any related follow-up. Distinguish a request from an applied edit. Return {"reply":"..."}.',
           JSON.stringify({ prompt, edits, recent }),
-          'brief',
+          'memory',
         ),
       );
       return { intent: 'answer', actions: [], reply: reply.reply };
@@ -397,17 +429,11 @@ export async function converse(
       ) &&
       wholeText <= 13000
     ) {
-      const source = analysis.transcript.map((s) => [Number(s.start.toFixed(1)), s.text]);
-      const context = {
-        prompt,
-        source,
-        history: history
-          .slice(-4)
-          .map((t) => ({ role: t.role, text: t.text.slice(0, 220), status: t.status })),
-      };
+      const source = analysis.transcript.map((s) => atTime(s.start) + ' ' + s.text).join('\n');
+      const context = { prompt, transcript: source };
       const reply = JSON.parse(
         await generate(
-          'Answer the user using only the timestamped speech and recent turns. Write one short complete sentence in the user\'s language. Give the main topic and the most relevant detail. Be specific. If the evidence is insufficient, say so. Return {"reply":"..."}.',
+          'Answer from the timestamped transcript. Give the main topic and one concrete detail in a single sentence of about 25 words, in the user\'s language. Be specific. If the evidence is insufficient, say so. Return {"reply":"..."}.',
           JSON.stringify(context),
           'brief',
         ),
@@ -417,18 +443,36 @@ export async function converse(
     const transcript = analysis.transcript.map((s) => [s.start, s.end, s.speaker, s.text]);
     const normalize = (s: string) =>
       s.toLocaleLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    const ignores = new Set([
+      'the',
+      'and',
+      'this',
+      'that',
+      'where',
+      'for',
+      'with',
+      'from',
+      'was',
+      'are',
+      'what',
+      'have',
+      'does',
+      'please',
+      'section',
+      'some',
+      'you',
+      'video',
+      'edit',
+      'make',
+      'keep',
+      'remove',
+      'about',
+    ]);
     const requestedTerms = new Set(
-      (
-        prompt +
-        ' ' +
-        history
-          .slice(-2)
-          .map((h) => h.text)
-          .join(' ')
-      )
+      prompt
         .split(/\s+/)
         .map(normalize)
-        .filter((t) => t.length > 2),
+        .filter((t) => t.length > 1 && !ignores.has(t)),
     );
     const occurrences: Record<string, number[][]> = Object.create(null);
     for (const segment of analysis.transcript)
