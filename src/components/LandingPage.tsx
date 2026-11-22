@@ -14,12 +14,12 @@ import {
   Upload,
   Wand2,
 } from 'lucide-react';
-import type { DemoCatalogItem } from '../lib/api';
-import { FALLBACK_DEMOS } from '../lib/fallbackData';
+import { apiUrl, type DemoCatalogItem } from '../lib/api';
+import { ErrorBoundary } from './ErrorBoundary';
 import { HeroOrbCanvas } from './HeroOrbCanvas';
 
 interface LandingPageProps {
-  demos: DemoCatalogItem[];
+  demos?: DemoCatalogItem[];
   onStartEditing: () => void;
   onTryDemo: (demoId?: string) => void;
 }
@@ -109,15 +109,15 @@ const SEARCH_SAMPLE_HITS = [
 ];
 
 export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPageProps) {
-  const safeDemos = demos && demos.length > 0 ? demos : FALLBACK_DEMOS;
+  const safeDemos = Array.isArray(demos) ? demos : [];
   const [activePromptIdx, setActivePromptIdx] = useState(0);
   const [activeVersionIdx, setActiveVersionIdx] = useState(1);
   const [searchFilter, setSearchFilter] = useState('AI');
   const [activeDemoId, setActiveDemoId] = useState<string>(safeDemos[0]?.id || 'demo-keynote');
 
-  const currentPrompt = PROMPT_EXAMPLES[activePromptIdx];
-  const currentVersion = VERSION_TABS[activeVersionIdx];
-  const selectedDemo = safeDemos.find((d) => d.id === activeDemoId) || safeDemos[0] || FALLBACK_DEMOS[0];
+  const currentPrompt = PROMPT_EXAMPLES[activePromptIdx] || PROMPT_EXAMPLES[0];
+  const currentVersion = VERSION_TABS[activeVersionIdx] || VERSION_TABS[0];
+  const selectedDemo = safeDemos.find((d) => d.id === activeDemoId) || safeDemos[0];
 
   return (
     <div className="min-h-screen bg-[#050711] text-slate-100 overflow-x-hidden">
@@ -204,7 +204,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               </button>
               <button
                 type="button"
-                onClick={() => onTryDemo(demos[0]?.id)}
+                onClick={() => onTryDemo(safeDemos[0]?.id)}
                 className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-slate-900/80 px-6 py-3.5 text-sm font-semibold text-slate-100 hover:border-cyan-400/50 hover:text-cyan-200 transition-all whitespace-nowrap cursor-pointer"
               >
                 <Play className="w-4 h-4 text-cyan-400" />
@@ -229,7 +229,15 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
           </motion.div>
 
           <div className="lg:col-span-6 relative h-[400px] sm:h-[460px] rounded-2xl border border-white/10 bg-[#080C1B]">
-            <HeroOrbCanvas />
+            <ErrorBoundary
+              fallback={
+                <div className="w-full h-full flex items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-950/40 via-indigo-950/40 to-fuchsia-950/40 text-xs font-mono text-cyan-300">
+                  EDITMIND CORE
+                </div>
+              }
+            >
+              <HeroOrbCanvas />
+            </ErrorBoundary>
             {/* Clean non-blur bottom caption strip inside 3D frame */}
             <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#070B19]/95 px-4 py-2.5 text-xs">
               <span className="text-slate-300 truncate">
@@ -518,10 +526,11 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               {selectedDemo ? (
                 <video
                   key={selectedDemo.id}
-                  src={selectedDemo.mediaUrl}
-                  poster={selectedDemo.thumbnailUrl}
+                  src={apiUrl(selectedDemo.mediaUrl)}
+                  poster={apiUrl(selectedDemo.thumbnailUrl)}
                   controls
                   playsInline
+                  preload="none"
                   className="w-full h-full object-cover"
                 />
               ) : null}
@@ -538,7 +547,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               </div>
               <button
                 type="button"
-                onClick={() => onTryDemo(selectedDemo?.id || safeDemos[0]?.id)}
+                onClick={() => onTryDemo(selectedDemo?.id)}
                 className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-violet-600 py-2 text-xs font-semibold text-white hover:brightness-110 cursor-pointer"
               >
                 Edit This Video Now
@@ -570,7 +579,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
               <div>
                 <div className="relative aspect-video bg-slate-950">
                   <img
-                    src={demo.thumbnailUrl}
+                    src={apiUrl(demo.thumbnailUrl)}
                     alt={demo.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
@@ -579,7 +588,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
                   <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs">
                     <span className="text-cyan-300 font-medium">{demo.category}</span>
                     <span className="font-mono tabular-nums text-white">
-                      {demo.durationSec.toFixed(1)}s
+                      {Number(demo.durationSec || 0).toFixed(1)}s
                     </span>
                   </div>
                 </div>
@@ -587,7 +596,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
                   <h3 className="text-base font-bold text-white">{demo.title}</h3>
                   <p className="text-xs text-slate-400 leading-relaxed">{demo.description}</p>
                   <div className="text-[11px] text-slate-400 font-mono">
-                    {demo.transcriptCount} segments · Sample: "{demo.examplePrompts[0]}"
+                    {demo.transcriptCount || 0} segments · Sample: "{demo.examplePrompts?.[0] || ''}"
                   </div>
                 </div>
               </div>
@@ -661,7 +670,7 @@ export function LandingPage({ demos = [], onStartEditing, onTryDemo }: LandingPa
             </button>
             <button
               type="button"
-              onClick={() => onTryDemo(demos[0]?.id)}
+              onClick={() => onTryDemo(safeDemos[0]?.id)}
               className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-slate-950/70 px-6 py-3 text-sm font-semibold text-white hover:border-cyan-400 cursor-pointer"
             >
               <Check className="w-4 h-4 text-emerald-400" />

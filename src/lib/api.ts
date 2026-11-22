@@ -1,5 +1,4 @@
 import { upload as uploadToVercelBlob } from '@vercel/blob/client';
-import { FALLBACK_DEMOS, FALLBACK_KEYNOTE_PROJECT } from './fallbackData';
 import type {
   AnalysisJob,
   EditImpactReport,
@@ -31,7 +30,15 @@ export const API_BASE_URL = (
 export function apiUrl(urlPath: string): string {
   if (!urlPath) return urlPath;
   if (/^(https?:|blob:|data:)/i.test(urlPath)) return urlPath;
-  return `${API_BASE_URL}${urlPath.startsWith('/') ? '' : '/'}${urlPath}`;
+  const normalizedPath = urlPath.startsWith('/') ? urlPath : `/${urlPath}`;
+  if (!API_BASE_URL) return normalizedPath;
+  if (API_BASE_URL === '/api' && (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))) {
+    return normalizedPath;
+  }
+  if (API_BASE_URL.endsWith('/api') && (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))) {
+    return `${API_BASE_URL}${normalizedPath.slice(4)}`;
+  }
+  return `${API_BASE_URL}${normalizedPath}`;
 }
 
 export interface HydratedProject extends ProjectRecord {
@@ -91,15 +98,23 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers as Record<string, string> | undefined),
     }),
   });
-  const contentType = res.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    throw new Error(`API endpoint ${url} returned ${contentType || 'non-JSON'} (status ${res.status})`);
+  const rawText = await res.text();
+  let data: unknown = {};
+  let parsedOk = true;
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      parsedOk = false;
+    }
   }
-  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const errObj = (data as { error?: string | { message?: string } }).error;
+    const errObj = parsedOk && data && typeof data === 'object' ? (data as { error?: string | { message?: string } }).error : undefined;
     const msg = typeof errObj === 'string' ? errObj : errObj?.message;
     throw new Error(msg || `Request failed (${res.status})`);
+  }
+  if (!parsedOk) {
+    throw new Error(`Unexpected non-JSON response from ${url}`);
   }
   return data as T;
 }
@@ -162,52 +177,17 @@ export const api = {
     setAuthToken(null);
   },
 
-  listDemos: async () => {
-    try {
-      const res = await requestJson<{ demos: DemoCatalogItem[] }>('/api/demos');
-      if (res && Array.isArray(res.demos) && res.demos.length > 0) return res;
-      return { demos: FALLBACK_DEMOS };
-    } catch {
-      return { demos: FALLBACK_DEMOS };
-    }
-  },
+  listDemos: () => requestJson<{ demos: DemoCatalogItem[] }>('/api/demos'),
 
-  listProjects: async () => {
-    try {
-      const res = await requestJson<{ projects: HydratedProject[] }>('/api/projects');
-      if (res && Array.isArray(res.projects)) return res;
-      return { projects: [FALLBACK_KEYNOTE_PROJECT] };
-    } catch {
-      return { projects: [FALLBACK_KEYNOTE_PROJECT] };
-    }
-  },
+  listProjects: () => requestJson<{ projects: HydratedProject[] }>('/api/projects'),
 
-  getProject: async (id: string) => {
-    try {
-      return await requestJson<{ project: HydratedProject }>(`/api/projects/${id}`);
-    } catch {
-      return { project: { ...FALLBACK_KEYNOTE_PROJECT, id } };
-    }
-  },
+  getProject: (id: string) => requestJson<{ project: HydratedProject }>(`/api/projects/${id}`),
 
-  createProjectFromDemo: async (demoId: string, title?: string) => {
-    try {
-      return await requestJson<{ project: HydratedProject }>('/api/projects/from-demo', {
-        method: 'POST',
-        body: JSON.stringify({ demoId, title }),
-      });
-    } catch {
-      const found = FALLBACK_DEMOS.find((d) => d.id === demoId) || FALLBACK_DEMOS[0];
-      return {
-        project: {
-          ...FALLBACK_KEYNOTE_PROJECT,
-          id: `proj-${Date.now()}`,
-          title: title || found.title,
-          thumbnailUrl: found.thumbnailUrl,
-        },
-      };
-    }
-  },
+  createProjectFromDemo: (demoId: string, title?: string) =>
+    requestJson<{ project: HydratedProject }>('/api/projects/from-demo', {
+      method: 'POST',
+      body: JSON.stringify({ demoId, title }),
+    }),
 
   updateProject: (
     id: string,

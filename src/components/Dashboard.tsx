@@ -58,6 +58,7 @@ export function Dashboard({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Real File Upload state
   const [dragActive, setDragActive] = useState(false);
@@ -351,11 +352,14 @@ export function Dashboard({
   };
 
   const handleOpenDemo = async (demoId: string) => {
+    setActionError(null);
     setBusyProjectId(demoId);
     try {
       const project = (await api.createProjectFromDemo(demoId)).project;
       await onRefreshProjects();
       onOpenProject(project);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to open demo project.');
     } finally {
       setBusyProjectId(null);
     }
@@ -366,26 +370,37 @@ export function Dashboard({
       setRenamingId(null);
       return;
     }
-    await api.updateProject(id, { title: renameText.trim() });
-    setRenamingId(null);
-    await onRefreshProjects();
+    setActionError(null);
+    try {
+      await api.updateProject(id, { title: renameText.trim() });
+      setRenamingId(null);
+      await onRefreshProjects();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to rename project.');
+    }
   };
 
   const handleDuplicate = async (id: string) => {
+    setActionError(null);
     setBusyProjectId(id);
     try {
       await api.duplicateProject(id);
       await onRefreshProjects();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to duplicate project.');
     } finally {
       setBusyProjectId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
+    setActionError(null);
     setBusyProjectId(id);
     try {
       await api.deleteProject(id);
       await onRefreshProjects();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete project.');
     } finally {
       setBusyProjectId(null);
     }
@@ -482,6 +497,21 @@ export function Dashboard({
             </button>
           </div>
         </div>
+
+        {/* Action Error Banner */}
+        {actionError && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+            <span>{actionError}</span>
+            <button
+              type="button"
+              aria-label="Dismiss error"
+              onClick={() => setActionError(null)}
+              className="text-rose-300 hover:text-white cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1 border-b border-white/10 pb-2 overflow-x-auto">
@@ -1036,7 +1066,7 @@ export function Dashboard({
                     <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-xs">
                       <span className="text-cyan-300 font-medium">{demo.category}</span>
                       <span className="font-mono tabular-nums text-white">
-                        {demo.durationSec.toFixed(1)}s
+                        {(demo.durationSec ?? 0).toFixed(1)}s
                       </span>
                     </div>
                   </div>
@@ -1044,7 +1074,7 @@ export function Dashboard({
                     <h3 className="text-base font-bold text-white">{demo.title}</h3>
                     <p className="text-xs text-slate-400">{demo.description}</p>
                     <div className="text-[11px] text-cyan-300/90 font-mono">
-                      Try: "{demo.examplePrompts[0]}"
+                      Try: "{demo.examplePrompts?.[0] || 'Remove pauses and add captions.'}"
                     </div>
                   </div>
                 </div>

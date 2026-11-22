@@ -480,7 +480,17 @@ export function getDemoCatalogMeta() {
     examplePrompts: d.examplePrompts,
     mediaUrl: `/api/demos/${d.id}/video`,
     thumbnailUrl: `/api/demos/${d.id}/thumb`,
+    estimatedTranscriptCount: d.beats.length,
+    estimatedDurationSec: Math.round(
+      d.beats.reduce((sum, b) => sum + Math.max(4, b.text.split(/\s+/).length * 0.42) + (b.pauseAfterSec || 0), 0) * 10,
+    ) / 10,
   }));
+}
+
+export function getDemoThumbnailFallbackPath(demoId: string): string | null {
+  const spec = DEMO_SPECS.find((d) => d.id === demoId);
+  if (!spec) return null;
+  return fs.existsSync(spec.imagePath) ? spec.imagePath : null;
 }
 
 async function synthesizeSpeechWav(text: string, voice: string, outWav: string): Promise<number> {
@@ -578,6 +588,7 @@ function smoothMotionFilter(mode: DemoSpec['beats'][number]['zoomMode']): string
 }
 
 let demoInitPromise: Promise<void> | null = null;
+const singleDemoPromises = new Map<string, Promise<void>>();
 
 async function buildSingleDemo(spec: DemoSpec): Promise<void> {
   const videoOut = path.join(DEMOS_DIR, `${spec.id}.mp4`);
@@ -922,11 +933,28 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
   fs.rmSync(workDir, { recursive: true, force: true });
 }
 
+export function ensureSingleDemoReady(demoId: string): Promise<void> {
+  const spec = DEMO_SPECS.find((d) => d.id === demoId);
+  if (!spec) {
+    return Promise.resolve();
+  }
+  const existing = singleDemoPromises.get(demoId);
+  if (existing) {
+    return existing;
+  }
+  const p = buildSingleDemo(spec).catch((err) => {
+    singleDemoPromises.delete(demoId);
+    throw err;
+  });
+  singleDemoPromises.set(demoId, p);
+  return p;
+}
+
 export function ensureDemoLibraryReady(): Promise<void> {
   if (!demoInitPromise) {
     demoInitPromise = (async () => {
       for (const spec of DEMO_SPECS) {
-        await buildSingleDemo(spec);
+        await ensureSingleDemoReady(spec.id);
       }
     })();
   }

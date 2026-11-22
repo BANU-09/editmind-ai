@@ -1082,6 +1082,8 @@ export function startBackgroundAnalysisJob(params: {
       activeJobPromises.delete(jobId);
     });
 
+  // Prevent Node UnhandledPromiseRejection termination when callers run jobs asynchronously
+  promise.catch(() => {});
   activeJobPromises.set(jobId, promise);
   return { job, promise };
 }

@@ -86,25 +86,35 @@ export function HeroOrbCanvas() {
     const isSoftwareGl = detectSoftwareGl();
 
     let renderer: THREE.WebGLRenderer;
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: !isSoftwareGl,
         alpha: true,
         powerPreference: 'high-performance',
       });
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(container.clientWidth || 560, container.clientHeight || 460);
+      renderer.shadowMap.enabled = false;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmremGenerator.dispose();
+
+      const initAspect = (container.clientWidth || 560) / (container.clientHeight || 460);
+      camera = new THREE.PerspectiveCamera(42, initAspect, 0.1, 100);
+      camera.position.set(0, 0.15, initAspect < 0.95 ? 9.8 : initAspect < 1.25 ? 7.8 : 6.7);
     } catch {
       setContextLost(true);
       return;
     }
-
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(container.clientWidth || 560, container.clientHeight || 460);
-    renderer.shadowMap.enabled = false;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
 
     const handleLost = (e: Event) => {
       e.preventDefault();
@@ -113,15 +123,6 @@ export function HeroOrbCanvas() {
     const handleRestored = () => setContextLost(false);
     renderer.domElement.addEventListener('webglcontextlost', handleLost);
     renderer.domElement.addEventListener('webglcontextrestored', handleRestored);
-
-    const scene = new THREE.Scene();
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmremGenerator.dispose();
-
-    const initAspect = (container.clientWidth || 560) / (container.clientHeight || 460);
-    const camera = new THREE.PerspectiveCamera(42, initAspect, 0.1, 100);
-    camera.position.set(0, 0.15, initAspect < 0.95 ? 9.8 : initAspect < 1.25 ? 7.8 : 6.7);
 
     // 3-point warm/cool studio lighting
     const hemi = new THREE.HemisphereLight(0x38bdf8, 0x1e1b4b, 0.9);

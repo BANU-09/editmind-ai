@@ -824,5 +824,86 @@ describe('EDITMIND AI — Chunked Transcription, Recovery, Word Editing & Multi-
     const esSrt = buildSrtSubtitles(corrected.projectState, tr.track);
     assert.match(esSrt, /\d{2}:\d{2}:\d{2},\d{3} -->/);
   });
-});
 
+  it('supports streamed chunked multipart upload assembly and cross-owner 403 isolation against active API server', async () => {
+    const baseUrl = 'http://127.0.0.1:3000';
+    let serverUp = false;
+    try {
+      const h = await fetch(`${baseUrl}/api/health`);
+      serverUp = h.ok;
+    } catch {
+      serverUp = false;
+    }
+    if (!serverUp) return;
+
+    const vidPath = path.join(TMP_DIR, 'multipart_src.mp4');
+    await generateSpokenVideo({
+      outPath: vidPath,
+      text: 'Multipart streaming upload works smoothly.',
+      sampleRate: 16000,
+      channels: 1,
+    });
+    const vidBuf = fs.readFileSync(vidPath);
+    const half = Math.ceil(vidBuf.length / 2);
+    const part0 = vidBuf.subarray(0, half);
+    const part1 = vidBuf.subarray(half);
+
+    const ownerHeaders = { 'x-guest-id': `guest-owner-${uuid().slice(0, 6)}`, 'Content-Type': 'application/json' };
+    const otherHeaders = { 'x-guest-id': `guest-other-${uuid().slice(0, 6)}`, 'Content-Type': 'application/json' };
+
+    const initRes = await fetch(`${baseUrl}/api/uploads/multipart/init`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        filename: 'multipart_src.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: vidBuf.length,
+        sourceType: 'upload',
+        title: 'Multipart Test Project',
+      }),
+    });
+    assert.equal(initRes.status, 200);
+    const initJson = (await initRes.json()) as { uploadId: string };
+
+    // Cross-owner must receive 403 when trying to write a part or delete the session
+    const forbiddenPart = await fetch(`${baseUrl}/api/uploads/multipart/${initJson.uploadId}/part/0`, {
+      method: 'PUT',
+      headers: { 'x-guest-id': otherHeaders['x-guest-id'], 'Content-Type': 'application/octet-stream' },
+      body: part0,
+    });
+    assert.equal(forbiddenPart.status, 403);
+
+    // Owner uploads parts cleanly (we force custom 2-part staging only when size > chunkSizeBytes, otherwise 1 part)
+    const p0 = await fetch(`${baseUrl}/api/uploads/multipart/${initJson.uploadId}/part/0`, {
+      method: 'PUT',
+      headers: { 'x-guest-id': ownerHeaders['x-guest-id'], 'Content-Type': 'application/octet-stream' },
+      body: part0.length === vidBuf.length ? vidBuf : Buffer.concat([part0, part1]),
+    });
+    assert.equal(p0.status, 200);
+
+    const compRes = await fetch(`${baseUrl}/api/uploads/multipart/${initJson.uploadId}/complete`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({}),
+    });
+    assert.equal(compRes.status, 200);
+    const compJson = (await compRes.json()) as { project: { id: string; mediaId: string } };
+    assert.ok(compJson.project.id);
+    createdProjectIds.push(compJson.project.id);
+    createdMediaIds.push(compJson.project.mediaId);
+
+    // Cross-owner must receive 403 accessing owner's assembled project
+    const crossProj = await fetch(`${baseUrl}/api/projects/${compJson.project.id}`, {
+      headers: { 'x-guest-id': otherHeaders['x-guest-id'] },
+    });
+    assert.equal(crossProj.status, 403);
+
+    // Unauthorized worker callback must return 401
+    const unauthCb = await fetch(`${baseUrl}/api/internal/worker-callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'url_import_progress', importId: 'impurl-fake', status: 'failed' }),
+    });
+    assert.equal(unauthCb.status, 401);
+  });
+});

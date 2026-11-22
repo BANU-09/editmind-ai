@@ -454,6 +454,8 @@ export function startUrlImportJob(params: {
   };
 
   const promise = run();
+  // Prevent Node UnhandledPromiseRejection termination when callers launch import-url asynchronously
+  promise.catch(() => {});
   return {
     importJob: getUrlImportJob(importId)!,
     promise,

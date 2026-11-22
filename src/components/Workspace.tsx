@@ -117,7 +117,32 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   );
 }
 
-export function Workspace({
+export function Workspace(props: WorkspaceProps) {
+  if (!props.project?.media) {
+    return (
+      <div className="min-h-screen bg-[#050711] text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-[#0B1022] p-6 text-center space-y-4">
+          <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+          <h2 className="text-lg font-semibold text-white">Source Media Unavailable</h2>
+          <p className="text-xs text-slate-400">
+            The source video for "{props.project?.title || 'this project'}" could not be loaded.
+          </p>
+          <button
+            type="button"
+            onClick={props.onBackDashboard}
+            className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return <WorkspaceInner {...props} />;
+}
+
+function WorkspaceInner({
   project,
   onProjectUpdated,
   onBackDashboard,
@@ -126,7 +151,9 @@ export function Workspace({
   const [analysis, setAnalysis] = useState<MediaAnalysis>(media.analysis);
 
   useEffect(() => {
-    setAnalysis(project.media!.analysis);
+    if (project.media?.analysis) {
+      setAnalysis(project.media.analysis);
+    }
   }, [project.media]);
 
   const [title, setTitle] = useState(project.title);

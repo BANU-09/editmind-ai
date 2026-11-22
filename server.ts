@@ -29,7 +29,12 @@ import {
 } from './server/blobStorage';
 import { getAppConfig, STRICT_MAX_UPLOAD_BYTES, SUPPORTED_LANGUAGES } from './server/config';
 import { db, DEMOS_DIR, EXPORTS_DIR, MUSIC_DIR, TEMP_DIR, THUMBS_DIR, UPLOADS_DIR } from './server/db';
-import { ensureDemoLibraryReady, getDemoCatalogMeta } from './server/demoGenerator';
+import {
+  ensureDemoLibraryReady,
+  ensureSingleDemoReady,
+  getDemoCatalogMeta,
+  getDemoThumbnailFallbackPath,
+} from './server/demoGenerator';
 import { runExportJob } from './server/exporter';
 import { hasGeminiKey } from './server/geminiClient';
 import {
@@ -400,8 +405,8 @@ async function startServer() {
     next();
   });
 
-  // Build / verify bundled demo videos without blocking port 3000 bind, and resume any interrupted analysis jobs
-  const demoReadyPromise = ensureDemoLibraryReady()
+  // Build / verify bundled demo videos without blocking port 3000 bind or /api/demos, and resume interrupted analysis jobs
+  void ensureDemoLibraryReady()
     .then(() => {
       console.log('[EDITMIND AI] Demo library ready.');
       if (!cfg.workerMode) {
@@ -547,39 +552,60 @@ async function startServer() {
     res.json({ ok: true });
   });
 
-  // Demo catalog & streaming
-  app.get('/api/demos', async (_req, res) => {
-    await demoReadyPromise;
+  // Demo catalog & streaming (non-blocking catalog + instant thumbnail fallback + per-demo on-demand readiness)
+  app.get('/api/demos', (_req, res) => {
     const catalog = getDemoCatalogMeta().map((item) => {
       const row = db
         .prepare('SELECT duration_sec, analysis_json FROM media_assets WHERE id = ?')
         .get(item.id) as { duration_sec: number; analysis_json: string } | undefined;
-      const analysis = row ? (JSON.parse(row.analysis_json) as MediaAnalysis) : null;
+      let analysis: MediaAnalysis | null = null;
+      if (row?.analysis_json) {
+        try {
+          analysis = JSON.parse(row.analysis_json) as MediaAnalysis;
+        } catch {
+          analysis = null;
+        }
+      }
       return {
-        ...item,
-        durationSec: row?.duration_sec || 30,
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        description: item.description,
+        examplePrompts: item.examplePrompts,
+        mediaUrl: item.mediaUrl,
+        thumbnailUrl: item.thumbnailUrl,
+        durationSec: row?.duration_sec || item.estimatedDurationSec || 30,
         topics: analysis?.topics || [],
         speakers: analysis?.speakers || [],
-        transcriptCount: analysis?.transcript.length || 0,
+        transcriptCount: analysis?.transcript?.length || item.estimatedTranscriptCount || 0,
+        ready: Boolean(row),
       };
     });
     res.json({ demos: catalog });
   });
 
   app.get('/api/demos/:id/video', async (req, res) => {
-    await demoReadyPromise;
-    const videoPath = path.join(DEMOS_DIR, `${req.params.id}.mp4`);
-    streamMediaWithRanges(req, res, videoPath, 'video/mp4');
-  });
-
-  app.get('/api/demos/:id/thumb', async (req, res) => {
-    await demoReadyPromise;
-    const thumbPath = path.join(THUMBS_DIR, `${req.params.id}.jpg`);
-    if (!fs.existsSync(thumbPath)) {
+    await ensureSingleDemoReady(req.params.id);
+    const videoPath = resolveConfinedPath(DEMOS_DIR, `${req.params.id}.mp4`);
+    if (!videoPath) {
       res.status(404).end();
       return;
     }
-    res.sendFile(thumbPath);
+    streamMediaWithRanges(req, res, videoPath, 'video/mp4');
+  });
+
+  app.get('/api/demos/:id/thumb', (req, res) => {
+    const thumbPath = resolveConfinedPath(THUMBS_DIR, `${req.params.id}.jpg`);
+    if (thumbPath && fs.existsSync(thumbPath)) {
+      res.sendFile(thumbPath);
+      return;
+    }
+    const fallback = getDemoThumbnailFallbackPath(req.params.id);
+    if (fallback) {
+      res.sendFile(fallback);
+      return;
+    }
+    res.status(404).end();
   });
 
   app.get('/api/thumbs/:filename', (req, res) => {
@@ -754,6 +780,10 @@ async function startServer() {
 
     if (waitForSync) {
       await promise.catch(() => {});
+    } else {
+      void promise.catch((err) => {
+        console.warn('[mediaProcessor] Background analysis failed:', err instanceof Error ? err.message : err);
+      });
     }
 
     const projectRow = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Record<
@@ -998,7 +1028,11 @@ async function startServer() {
           res.status(400).json({ error: `Invalid partIndex ${req.params.partIndex}.` });
           return;
         }
-        const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+        const bodyBuf = Buffer.isBuffer(req.body)
+          ? req.body
+          : typeof req.body === 'string'
+            ? Buffer.from(req.body)
+            : Buffer.alloc(0);
         if (bodyBuf.length === 0) {
           res.status(400).json({ error: 'Uploaded chunk part is empty.' });
           return;
@@ -1159,6 +1193,7 @@ async function startServer() {
       if (req.query.sync === '1') {
         await promise.catch(() => {});
       } else {
+        void promise.catch(() => {});
         // Allow fast synchronous URL/SSRF validation errors to surface immediately
         await new Promise((r) => setTimeout(r, 80));
       }
@@ -1212,10 +1247,14 @@ async function startServer() {
 
   app.get('/api/media/:id/stream', (req, res) => {
     const row = db
-      .prepare('SELECT file_path, mime_type FROM media_assets WHERE id = ?')
-      .get(req.params.id) as { file_path: string; mime_type: string } | undefined;
+      .prepare('SELECT file_path, mime_type, blob_url FROM media_assets WHERE id = ?')
+      .get(req.params.id) as { file_path: string; mime_type: string; blob_url?: string } | undefined;
     if (!row) {
       res.status(404).json({ error: 'Media asset not found.' });
+      return;
+    }
+    if ((!row.file_path || !fs.existsSync(row.file_path)) && row.blob_url) {
+      res.redirect(302, row.blob_url);
       return;
     }
     streamMediaWithRanges(req, res, row.file_path, row.mime_type || 'video/mp4');
@@ -1356,13 +1395,18 @@ async function startServer() {
         res.status(403).json({ error: 'Access denied to this media asset.' });
         return;
       }
+      const filePath = mediaRow.file_path as string;
+      if (!filePath || !fs.existsSync(filePath)) {
+        res.status(404).json({ error: 'Original source video file missing on server disk.' });
+        return;
+      }
       const { audioStreamIndex = 0, projectId, languageOverride, vocabulary } = (req.body || {}) as {
         audioStreamIndex?: number;
         projectId?: string;
         languageOverride?: string;
         vocabulary?: unknown;
       };
-      const meta = await probeVideoFile(mediaRow.file_path as string);
+      const meta = await probeVideoFile(filePath);
       if (audioStreamIndex < 0 || audioStreamIndex >= Math.max(1, meta.detectedAudioStreams)) {
         res.status(400).json({
           error: `Invalid audioStreamIndex ${audioStreamIndex}. Available streams: ${meta.detectedAudioStreams}.`,
@@ -1604,12 +1648,12 @@ async function startServer() {
   });
 
   app.post('/api/projects/from-demo', async (req, res) => {
-    await demoReadyPromise;
     const { demoId, title } = req.body as { demoId?: string; title?: string };
     if (!demoId) {
       res.status(400).json({ error: 'demoId is required.' });
       return;
     }
+    await ensureSingleDemoReady(demoId);
     const mediaRow = db
       .prepare("SELECT * FROM media_assets WHERE id = ? AND source_type = 'demo'")
       .get(demoId) as Record<string, unknown> | undefined;
@@ -2395,7 +2439,7 @@ async function startServer() {
       return;
     }
     const ctx = getAuthContext(req);
-    const { importJob } = startUrlImportJob({
+    const { importJob, promise } = startUrlImportJob({
       url: url.trim(),
       title,
       userId: ctx.userId,
@@ -2403,6 +2447,7 @@ async function startServer() {
       languageOverride: languageOverride?.trim() || undefined,
       vocabulary: parseVocabularyInput(vocabulary),
     });
+    void promise.catch(() => {});
     await new Promise((r) => setTimeout(r, 80));
     const latest = getUrlImportJob(importJob.id) || importJob;
     if (latest.status === 'failed') {
@@ -2970,10 +3015,15 @@ async function startServer() {
     const event = (req.body || {}) as {
       type?: string;
       jobId?: string;
+      importId?: string;
       mediaId?: string;
       projectId?: string | null;
+      analysisJobId?: string;
       status?: string;
       progress?: number;
+      bytesDownloaded?: number;
+      totalBytes?: number | null;
+      sourceBlobUrl?: string;
       analysis?: MediaAnalysis;
       thumbnailBlobUrl?: string;
       outputUrl?: string;
@@ -2982,6 +3032,109 @@ async function startServer() {
       durationSec?: number;
       error?: string;
     };
+
+    if (event.type === 'url_import_progress' && event.importId) {
+      const impRow = db.prepare('SELECT * FROM url_imports WHERE id = ?').get(event.importId) as
+        | Record<string, unknown>
+        | undefined;
+      if (impRow) {
+        const now = new Date().toISOString();
+        if (event.status === 'completed' && event.mediaId && event.projectId && event.analysis) {
+          const mediaExists = db.prepare('SELECT id FROM media_assets WHERE id = ?').get(event.mediaId);
+          if (!mediaExists) {
+            const urlObj = (() => {
+              try {
+                return new URL(impRow.url as string);
+              } catch {
+                return null;
+              }
+            })();
+            const filename =
+              urlObj && path.basename(urlObj.pathname) ? path.basename(urlObj.pathname) : 'imported-video.mp4';
+            db.prepare(
+              `INSERT OR IGNORE INTO media_assets
+               (id, user_id, guest_token, source_type, source_url, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, vocabulary_json, blob_url, created_at)
+               VALUES (?, ?, ?, 'url', ?, ?, 'video/mp4', '', ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)`,
+            ).run(
+              event.mediaId,
+              (impRow.user_id as string | null) ?? null,
+              (impRow.guest_token as string | null) ?? null,
+              impRow.url as string,
+              filename,
+              event.thumbnailBlobUrl || '/api/demos/demo-keynote/thumb',
+              event.analysis.durationSec,
+              event.analysis.width,
+              event.analysis.height,
+              event.analysis.hasAudio ? 1 : 0,
+              event.analysis.analysisMode,
+              JSON.stringify(event.analysis),
+              event.sourceBlobUrl || null,
+              now,
+            );
+          }
+
+          const projExists = db.prepare('SELECT id FROM projects WHERE id = ?').get(event.projectId);
+          if (!projExists) {
+            const initialState = createInitialProjectState(event.analysis);
+            const versions = generateThreeVersions(event.analysis);
+            const projTitle = (impRow.title as string | null) || 'Imported Video';
+            const initialHistory: HistoryEntry[] = [
+              {
+                id: uuid(),
+                timestamp: now,
+                label: 'Project Created from URL',
+                durationAfter: initialState.duration,
+                stateSnapshot: initialState,
+              },
+            ];
+            db.prepare(
+              `INSERT OR IGNORE INTO projects
+               (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '[]', ?, ?)`,
+            ).run(
+              event.projectId,
+              (impRow.user_id as string | null) ?? null,
+              (impRow.guest_token as string | null) ?? null,
+              projTitle,
+              event.mediaId,
+              event.thumbnailBlobUrl || '/api/demos/demo-keynote/thumb',
+              JSON.stringify(initialState),
+              JSON.stringify(initialHistory),
+              JSON.stringify(versions),
+              now,
+              now,
+            );
+          }
+        }
+
+        db.prepare(
+          `UPDATE url_imports SET
+             status = ?,
+             progress = ?,
+             bytes_downloaded = COALESCE(?, bytes_downloaded),
+             total_bytes = COALESCE(?, total_bytes),
+             media_id = COALESCE(?, media_id),
+             project_id = COALESCE(?, project_id),
+             analysis_job_id = COALESCE(?, analysis_job_id),
+             error = ?,
+             updated_at = ?
+           WHERE id = ?`,
+        ).run(
+          event.status ?? impRow.status,
+          event.progress ?? impRow.progress,
+          event.bytesDownloaded ?? null,
+          event.totalBytes ?? null,
+          event.mediaId ?? null,
+          event.projectId ?? null,
+          event.analysisJobId ?? null,
+          event.error ?? impRow.error,
+          now,
+          event.importId,
+        );
+      }
+      res.json({ ok: true });
+      return;
+    }
 
     if (event.type === 'analysis_progress' && event.jobId) {
       updateAnalysisJobRow(event.jobId, {
