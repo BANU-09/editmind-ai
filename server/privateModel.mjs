@@ -19,7 +19,7 @@ async function connectionForRequest(tier) {
         .then((worker) => {
           connections.set(tier, {
             worker,
-            until: Math.min(Date.now() + 120000, worker.expiresAt?.getTime() ?? Infinity),
+            until: Math.min(Date.now() + 120000, (worker.expiresAt?.getTime() ?? Infinity) - 5 * 60_000),
           });
           return worker;
         })
@@ -30,6 +30,7 @@ async function connectionForRequest(tier) {
 async function connect(tier) {
   const worker = await sdk.Sandbox.getOrCreate({
     name: 'editmind-language',
+    resume: true,
     image: 'vercel/sandbox/node:24',
     ports: [],
     resources: { vcpus: 4 },
@@ -121,7 +122,6 @@ export async function generate(system, input, stage, onInference) {
   }
 }
 async function infer(system, input, stage, tier, onInference) {
-  const worker = await connectionForRequest(tier);
   const action = {
     type: 'object',
     properties: {
@@ -204,7 +204,7 @@ async function infer(system, input, stage, tier, onInference) {
       : ['brief', 'chat', 'memory'].includes(stage)
         ? {
             type: 'object',
-            properties: { reply: { type: 'string' } },
+            properties: { reply: { type: 'string', maxLength: stage === 'chat' ? 120 : 275 } },
             required: ['reply'],
             additionalProperties: false,
           }
@@ -280,7 +280,7 @@ async function infer(system, input, stage, tier, onInference) {
     cache_prompt: true,
     response_format: { type: 'json_schema', json_schema: { name: 'edit_reply', schema } },
   };
-  const result = await worker.runCommand({
+  const request = async () => (await connectionForRequest(tier)).runCommand({
     cmd: 'curl',
     args: [
       '-fsS',
@@ -294,8 +294,16 @@ async function infer(system, input, stage, tier, onInference) {
     ],
     stdin: Readable.from([Buffer.from(JSON.stringify(body))]),
   });
+  let result = await request();
+  // A resumed sandbox restores the weights on disk, but both server processes
+  // must be started again. Reconnect once before returning a transport error.
+  if ([7, 52, 55, 56, 137, 143].includes(result.exitCode)) {
+    connections.clear();
+    result = await request();
+  }
   if (result.exitCode !== 0) {
     connections.delete(tier);
+    console.warn('Private inference request failed', { tier, stage, exitCode: result.exitCode });
     throw new Error(
       result.exitCode === 28
         ? 'The editing model timed out. Please retry.'
