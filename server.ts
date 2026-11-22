@@ -4,7 +4,6 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { v4 as uuid } from 'uuid';
 import {
   computeEditImpact,
@@ -372,11 +371,7 @@ async function startServer() {
     const isWildcard = cfg.corsOrigins.includes('*');
     const isAllowed = Boolean(
       origin &&
-        (isWildcard ||
-          cfg.corsOrigins.includes(origin) ||
-          origin.endsWith('.vercel.app') ||
-          origin.startsWith('http://localhost:') ||
-          origin.startsWith('http://127.0.0.1:')),
+        (isWildcard || cfg.corsOrigins.includes(origin)),
     );
     if (origin && isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
@@ -586,7 +581,7 @@ async function startServer() {
 
   app.get('/api/demos/:id/video', async (req, res) => {
     await ensureSingleDemoReady(req.params.id);
-    const videoPath = resolveConfinedPath(DEMOS_DIR, `${req.params.id}.mp4`);
+    const videoPath = resolveConfinedPath(DEMOS_DIR, `${req.params.id}-narrated.mp4`);
     if (!videoPath) {
       res.status(404).end();
       return;
@@ -3287,6 +3282,7 @@ async function startServer() {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   } else {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

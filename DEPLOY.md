@@ -1,5 +1,11 @@
 # EDITMIND AI — Production Deployment Guide (Vercel + Vercel Blob + Google Cloud Run Worker)
 
+## Current Vercel deployment
+
+The public app uses the Express media server, local Whisper and FFmpeg in a named Vercel Sandbox. The browser discovers its current address through `/api/backend` and uploads directly to the worker. SQLite, uploads and MP4 renders live on the `editmind-project-data` Drive, mounted at `/mnt/editmind`. The five demos use the same recorded narration and beat timings in the browser and on the server.
+
+The production build packages the worker with `scripts/package-media-worker.mjs`. The launcher uses the project's Vercel identity to start or resume it. The first request after sleep can take longer. The current deployment allows up to 45 minutes per worker session. A dedicated container backend can also be configured through `VITE_API_BASE_URL` as described below.
+
 This repository implements the full-stack **EDITMIND AI** platform with:
 1. **Frontend (`dist/`)**: Vite + React 19 SPA deployed to **Vercel** (or served directly by `server.ts`).
 2. **Backend API Control Plane (`server.ts`)**: Express + SQLite + `@google/genai` + AI edit planner + `@vercel/blob` token exchange + async job orchestrator.

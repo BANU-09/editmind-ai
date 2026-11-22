@@ -2,7 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "npm install --ignore-scripts --no-audit --no-fund",
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_MEDIA_WORKER=1 npm run build && node scripts/package-media-worker.mjs",
+  "functions": {
+    "api/backend.mjs": { "includeFiles": ".media-worker/runtime.tgz", "maxDuration": 300 }
+  },
   "outputDirectory": "dist",
   "rewrites": [
     {

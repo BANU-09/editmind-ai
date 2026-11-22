@@ -23,15 +23,34 @@ export interface LanguageOption {
   nativeLabel: string;
 }
 
-export const API_BASE_URL = (
+export let API_BASE_URL = (
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL || ''
 ).replace(/\/$/, '');
+const discoverWorker = !API_BASE_URL && import.meta.env.VITE_MEDIA_WORKER === '1';
+let workerValidUntil = 0;
+let workerLookup: Promise<void> | undefined;
+
+async function connectWorker() {
+  if (!discoverWorker || Date.now() < workerValidUntil) return;
+  workerLookup ??= (async () => {
+    const response = await fetch('/api/backend', { cache: 'no-store' });
+    if (!response.ok) throw new Error('The media backend is starting or unavailable. Please try again.');
+    const { origin } = await response.json();
+    const url = new URL(origin);
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.vercel.run')) {
+      throw new Error('Unexpected media backend address.');
+    }
+    API_BASE_URL = url.origin;
+    workerValidUntil = Date.now() + 30000;
+  })().finally(() => { workerLookup = undefined; });
+  return workerLookup;
+}
 
 export function apiUrl(urlPath: string): string {
   if (!urlPath) return urlPath;
   if (/^(https?:|blob:|data:)/i.test(urlPath)) return urlPath;
   const normalizedPath = urlPath.startsWith('/') ? urlPath : `/${urlPath}`;
-  if (!API_BASE_URL) return normalizedPath;
+  if (!API_BASE_URL || !normalizedPath.startsWith('/api/')) return normalizedPath;
   if (API_BASE_URL === '/api' && (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))) {
     return normalizedPath;
   }
@@ -125,6 +144,7 @@ class ApiError extends Error {
 }
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  await connectWorker();
   const res = await fetch(apiUrl(url), {
     ...init,
     credentials: 'include',
@@ -355,6 +375,7 @@ export const api = {
   ): Promise<HydratedProject> => {
     const caps = await getHealthCapabilities();
     if (!caps?.ok) {
+      if (discoverWorker) throw new Error('The transcription backend is unavailable. Please retry the upload.');
       return fallbackIngestLocalMedia(file, filename, sourceType, title, onProgress);
     }
 

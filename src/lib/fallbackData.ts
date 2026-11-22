@@ -1,3 +1,4 @@
+import narrationTimings from '../shared/demoNarration.json';
 import type {
   FillerHit,
   ImportantMoment,
@@ -19,7 +20,6 @@ interface BeatSpec {
   speaker: string;
   topic: string;
   text: string;
-  speechSec: number; // Duration of this spoken beat in the bundled MP3
   pauseAfterSec: number;
   sceneTitle: string;
   sceneDescription: string;
@@ -33,7 +33,7 @@ interface BeatSpec {
 }
 
 interface FallbackDemoSpec {
-  id: string;
+  id: keyof typeof narrationTimings;
   title: string;
   category: string;
   description: string;
@@ -60,7 +60,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Introduction',
         text: 'Welcome everyone to the NovaPulse AI launch keynote. Today we are changing how teams edit video by meaning instead of scrubbing timelines.',
-        speechSec: 7.695,
         pauseAfterSec: 1.6,
         sceneTitle: 'Keynote Stage Opening',
         sceneDescription:
@@ -72,7 +71,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Core Benefits',
         text: 'With our semantic AI engine, creators cut post production time by eighty percent while keeping narrative clarity intact.',
-        speechSec: 7.14,
         pauseAfterSec: 0.4,
         sceneTitle: 'Productivity Benefit Slide',
         sceneDescription: 'Stage presentation highlighting eighty percent faster editing workflow.',
@@ -88,7 +86,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Pricing Overview',
         text: 'Um, let us talk about simple plans. Pricing starts at forty nine dollars per seat each month for unlimited AI indexing.',
-        speechSec: 7.585,
         pauseAfterSec: 1.8,
         sceneTitle: 'Pricing Tier Reveal',
         sceneDescription: 'First pricing announcement detailing forty nine dollar per seat plan.',
@@ -104,7 +101,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Live Demonstration',
         text: 'Now watch this live AI product demonstration. Type remove filler words or jump to any spoken topic and the cut renders automatically.',
-        speechSec: 8.43,
         pauseAfterSec: 0.6,
         sceneTitle: 'Live AI Editing Demonstration',
         sceneDescription:
@@ -121,7 +117,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Repeated Pricing',
         text: 'Uh, and just as a quick reminder, pricing starts at forty nine dollars per seat with zero hidden export fees.',
-        speechSec: 6.905,
         pauseAfterSec: 1.5,
         sceneTitle: 'Pricing Recap Slide',
         sceneDescription: 'Second mention of pricing repeating the forty nine dollar rate.',
@@ -132,7 +127,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Customer Proof',
         text: 'Studios using AI semantic search find exact camera takes in seconds rather than hours of manual review.',
-        speechSec: 6.53,
         pauseAfterSec: 0.5,
         sceneTitle: 'Enterprise Adoption Showcase',
         sceneDescription: 'Overview of production teams adopting semantic search.',
@@ -148,7 +142,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Elena Vance',
         topic: 'Conclusion CTA',
         text: 'Terms apply to annual enterprise billing. Start your free fourteen day trial today and publish faster with NovaPulse AI.',
-        speechSec: 6.86,
         pauseAfterSec: 0.3,
         sceneTitle: 'Closing Call To Action',
         sceneDescription: 'Final keynote frame with disclaimer and free trial call to action.',
@@ -179,7 +172,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Maya Chen',
         topic: 'Podcast Intro',
         text: 'Welcome back to Founders Unfiltered. Today Liam and I are breaking down how AI tools transform video editing.',
-        speechSec: 6.62,
         pauseAfterSec: 1.2,
         sceneTitle: 'Studio Two-Shot Opening',
         sceneDescription: 'Maya and Liam seated across a walnut desk with studio broadcast microphones.',
@@ -190,7 +182,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Liam Brooks',
         topic: 'Editing Bottleneck',
         text: 'Um, honestly, scrubbing ninety minutes of raw interview footage used to take my whole afternoon.',
-        speechSec: 7.01,
         pauseAfterSec: 1.5,
         sceneTitle: 'Liam Guest Perspective',
         sceneDescription: 'Liam speaking into dynamic studio mic with notes in hand.',
@@ -201,7 +192,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Maya Chen',
         topic: 'Content Protection',
         text: 'Exactly. What changed everything for our studio was content protection so an editor never deletes a sponsor disclaimer by mistake.',
-        speechSec: 8.43,
         pauseAfterSec: 0.5,
         sceneTitle: 'Maya Explaining Protection',
         sceneDescription: 'Maya gesturing warmly while discussing editorial safeguards.',
@@ -217,7 +207,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Liam Brooks',
         topic: 'Multi-Version Publishing',
         text: 'Uh, and generating a fast hook version for social alongside our full episode saved our team ten hours a week.',
-        speechSec: 7.825,
         pauseAfterSec: 0.4,
         sceneTitle: 'Multi-Format Discussion',
         sceneDescription: 'Both hosts discussing social hooks versus deep-dive episodes.',
@@ -233,7 +222,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Maya Chen',
         topic: 'Episode Outro',
         text: 'Subscribe for next week when we test live camera workflows. Thanks for tuning in.',
-        speechSec: 5.285,
         pauseAfterSec: 0.3,
         sceneTitle: 'Podcast Closing',
         sceneDescription: 'Hosts wrapping up the interview.',
@@ -264,7 +252,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Marcus Cole',
         topic: 'Tutorial Introduction',
         text: 'Hey creators, in this masterclass you will learn how to turn raw studio footage into a finished edit using plain English prompts.',
-        speechSec: 8.321,
         pauseAfterSec: 1.4,
         sceneTitle: 'Workstation Overview',
         sceneDescription: 'Creator desk with ultrawide monitor showing color curves and cinema lens.',
@@ -275,7 +262,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Marcus Cole',
         topic: 'Step 1 Ingest & Index',
         text: 'Step one is indexing your clip. The AI maps every spoken word, silence gap, and scene change onto a unified timeline.',
-        speechSec: 8.4025,
         pauseAfterSec: 0.5,
         sceneTitle: 'Timeline & Waveform View',
         sceneDescription: 'Close focus on monitor editing interface and audio scopes.',
@@ -291,7 +277,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Marcus Cole',
         topic: 'Step 2 Warning & Safety',
         text: 'Important warning before exporting: always verify your audio sample rate and protected disclaimer markers so nothing gets clipped.',
-        speechSec: 7.3919,
         pauseAfterSec: 1.3,
         sceneTitle: 'Export Pre-Flight Warning',
         sceneDescription: 'Desk shot highlighting audio hardware and SSD drive.',
@@ -307,7 +292,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Marcus Cole',
         topic: 'Tutorial Conclusion',
         text: 'Now try exporting in 1080p MP4 and drop your questions in the comments below.',
-        speechSec: 5.5407,
         pauseAfterSec: 0.3,
         sceneTitle: 'Final Render Summary',
         sceneDescription: 'Full studio workstation wrap-up.',
@@ -338,7 +322,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Aria Navarro',
         topic: 'Sunrise Departure',
         text: 'Five thirty in the morning on Highway One, and the coastal fog is finally breaking over the Pacific cliffs.',
-        speechSec: 6.205,
         pauseAfterSec: 1.7,
         sceneTitle: 'Golden Hour Coastal Highway',
         sceneDescription: 'Sweeping aerial view of sunlit cliffside road and ocean surf.',
@@ -349,7 +332,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Aria Navarro',
         topic: 'Scenic Bridge Crossing',
         text: 'Every curve reveals another hidden cove. Travelling with lightweight gear lets us capture moments without slowing down.',
-        speechSec: 7.02,
         pauseAfterSec: 1.4,
         sceneTitle: 'Cliffside Bridge Vista',
         sceneDescription: 'Warm sunlight illuminating bridge arching over rugged coast.',
@@ -365,7 +347,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Aria Navarro',
         topic: 'Vlog Closing',
         text: 'Follow along for part two as we hike into the redwoods at dusk.',
-        speechSec: 3.79,
         pauseAfterSec: 0.4,
         sceneTitle: 'Horizon Sunset Outro',
         sceneDescription: 'Wide coastal horizon fading into warm clouds.',
@@ -396,7 +377,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Jordan Vance',
         topic: 'Launch Hook',
         text: 'Meet Aether SE One. Cinema grade optics engineered into brushed titanium.',
-        speechSec: 5.18,
         pauseAfterSec: 0.7,
         sceneTitle: 'Titanium Chassis Reveal',
         sceneDescription:
@@ -413,7 +393,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Jordan Vance',
         topic: 'Product Demonstration',
         text: 'Watch the autofocus lock instantly at sixty frames per second with zero focus breathing in low light.',
-        speechSec: 6.225,
         pauseAfterSec: 1.2,
         sceneTitle: 'Autofocus Lens Demo',
         sceneDescription: 'Close inspection of luminous cyan lens ring and precision dials.',
@@ -429,7 +408,6 @@ const FALLBACK_DEMO_SPECS: FallbackDemoSpec[] = [
         speaker: 'Jordan Vance',
         topic: 'Pricing & Disclaimer',
         text: 'Pre order today at twelve ninety nine. Limited launch pricing valid through December thirty first, terms apply.',
-        speechSec: 7.005,
         pauseAfterSec: 0.4,
         sceneTitle: 'Launch Offer & Terms',
         sceneDescription: 'Architectural gallery framing the flagship camera.',
@@ -502,7 +480,7 @@ function buildFallbackAnalysis(spec: FallbackDemoSpec): MediaAnalysis {
   let cursor = 0;
 
   spec.beats.forEach((beat, i) => {
-    const speechDur = beat.speechSec;
+    const speechDur = narrationTimings[spec.id][i];
     const beatStart = Math.round(cursor * 1000) / 1000;
     const beatEnd = Math.round((cursor + speechDur) * 1000) / 1000;
     const pauseDur = beat.pauseAfterSec || 0;
@@ -621,19 +599,21 @@ function buildFallbackAnalysis(spec: FallbackDemoSpec): MediaAnalysis {
 // cuts and captions on their original clock while seeking the recorded narration.
 export function getNarrationPosition(analysis: MediaAnalysis, sourceTime: number) {
   const spec = FALLBACK_DEMO_SPECS.find(d => d.id === analysis.mediaId);
+  if (!spec) return { time: sourceTime, rate: 1 };
   let recordingStart = 0;
-  for (const [i, beat] of (spec?.beats ?? []).entries()) {
+  for (const [i, beat] of spec.beats.entries()) {
+    const speechSec = narrationTimings[spec.id][i];
     const segment = analysis.transcript[i];
     if (!segment) break;
     if (sourceTime <= segment.end + 0.001) {
       const offset = Math.max(0, sourceTime - segment.start);
       const speechLength = Math.max(0.001, segment.end - segment.start - beat.pauseAfterSec);
-      const rate = beat.speechSec / speechLength;
+      const rate = speechSec / speechLength;
       return offset < speechLength
         ? { time: recordingStart + offset * rate, rate }
-        : { time: recordingStart + beat.speechSec + offset - speechLength, rate: 1 };
+        : { time: recordingStart + speechSec + offset - speechLength, rate: 1 };
     }
-    recordingStart += beat.speechSec + beat.pauseAfterSec;
+    recordingStart += speechSec + beat.pauseAfterSec;
   }
   return { time: sourceTime, rate: 1 };
 }
@@ -643,7 +623,7 @@ export const FALLBACK_DEMOS: DemoCatalogItem[] = FALLBACK_DEMO_SPECS.map((spec) 
   const estimatedDuration =
     Math.round(
       spec.beats.reduce(
-        (sum, b) => sum + b.speechSec + b.pauseAfterSec,
+        (sum, b, i) => sum + narrationTimings[spec.id][i] + b.pauseAfterSec,
         0,
       ) * 10,
     ) / 10;

@@ -1,3 +1,4 @@
+import narrationTimings from '../src/shared/demoNarration.json';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -18,7 +19,7 @@ import { alignWordsWithAudioEnergy, extractAudioFeatures } from './mediaProcesso
 const execFileAsync = promisify(execFile);
 
 export interface DemoSpec {
-  id: string;
+  id: keyof typeof narrationTimings;
   title: string;
   category: string;
   description: string;
@@ -26,7 +27,6 @@ export interface DemoSpec {
   examplePrompts: string[];
   beats: Array<{
     speaker: string;
-    voice: 'slt' | 'rms' | 'kal16' | 'awb';
     topic: string;
     text: string;
     pauseAfterSec?: number;
@@ -61,7 +61,6 @@ const DEMO_SPECS: DemoSpec[] = [
     beats: [
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Introduction',
         text: 'Welcome everyone to the NovaPulse AI launch keynote. Today we are changing how teams edit video by meaning instead of scrubbing timelines.',
         pauseAfterSec: 1.6,
@@ -73,7 +72,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Core Benefits',
         text: 'With our semantic AI engine, creators cut post production time by eighty percent while keeping narrative clarity intact.',
         pauseAfterSec: 0.4,
@@ -90,7 +88,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Pricing Overview',
         text: 'Um, let us talk about simple plans. Pricing starts at forty nine dollars per seat each month for unlimited AI indexing.',
         pauseAfterSec: 1.8,
@@ -107,7 +104,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Live Demonstration',
         text: 'Now watch this live AI product demonstration. Type remove filler words or jump to any spoken topic and the cut renders automatically.',
         pauseAfterSec: 0.6,
@@ -124,7 +120,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Repeated Pricing',
         text: 'Uh, and just as a quick reminder, pricing starts at forty nine dollars per seat with zero hidden export fees.',
         pauseAfterSec: 1.5,
@@ -136,7 +131,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Customer Proof',
         text: 'Studios using AI semantic search find exact camera takes in seconds rather than hours of manual review.',
         pauseAfterSec: 0.5,
@@ -153,7 +147,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Elena Vance',
-        voice: 'slt',
         topic: 'Conclusion CTA',
         text: 'Terms apply to annual enterprise billing. Start your free fourteen day trial today and publish faster with NovaPulse AI.',
         pauseAfterSec: 0.3,
@@ -186,7 +179,6 @@ const DEMO_SPECS: DemoSpec[] = [
     beats: [
       {
         speaker: 'Maya Chen',
-        voice: 'slt',
         topic: 'Podcast Intro',
         text: 'Welcome back to Founders Unfiltered. Today Liam and I are breaking down how AI tools transform video editing.',
         pauseAfterSec: 1.2,
@@ -198,7 +190,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Liam Brooks',
-        voice: 'rms',
         topic: 'Editing Bottleneck',
         text: 'Um, honestly, scrubbing ninety minutes of raw interview footage used to take my whole afternoon.',
         pauseAfterSec: 1.5,
@@ -210,7 +201,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Maya Chen',
-        voice: 'slt',
         topic: 'Content Protection',
         text: 'Exactly. What changed everything for our studio was content protection so an editor never deletes a sponsor disclaimer by mistake.',
         pauseAfterSec: 0.5,
@@ -227,7 +217,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Liam Brooks',
-        voice: 'rms',
         topic: 'Multi-Version Publishing',
         text: 'Uh, and generating a fast hook version for social alongside our full episode saved our team ten hours a week.',
         pauseAfterSec: 0.4,
@@ -244,7 +233,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Maya Chen',
-        voice: 'slt',
         topic: 'Episode Outro',
         text: 'Subscribe for next week when we test live camera workflows. Thanks for tuning in.',
         pauseAfterSec: 0.3,
@@ -277,7 +265,6 @@ const DEMO_SPECS: DemoSpec[] = [
     beats: [
       {
         speaker: 'Marcus Cole',
-        voice: 'kal16',
         topic: 'Tutorial Introduction',
         text: 'Hey creators, in this masterclass you will learn how to turn raw studio footage into a finished edit using plain English prompts.',
         pauseAfterSec: 1.4,
@@ -289,7 +276,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Marcus Cole',
-        voice: 'kal16',
         topic: 'Step 1 Ingest & Index',
         text: 'Step one is indexing your clip. The AI maps every spoken word, silence gap, and scene change onto a unified timeline.',
         pauseAfterSec: 0.5,
@@ -306,7 +292,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Marcus Cole',
-        voice: 'kal16',
         topic: 'Step 2 Warning & Safety',
         text: 'Important warning before exporting: always verify your audio sample rate and protected disclaimer markers so nothing gets clipped.',
         pauseAfterSec: 1.3,
@@ -323,7 +308,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Marcus Cole',
-        voice: 'kal16',
         topic: 'Tutorial Conclusion',
         text: 'Now try exporting in 1080p MP4 and drop your questions in the comments below.',
         pauseAfterSec: 0.3,
@@ -356,7 +340,6 @@ const DEMO_SPECS: DemoSpec[] = [
     beats: [
       {
         speaker: 'Aria Navarro',
-        voice: 'slt',
         topic: 'Sunrise Departure',
         text: 'Five thirty in the morning on Highway One, and the coastal fog is finally breaking over the Pacific cliffs.',
         pauseAfterSec: 1.7,
@@ -368,7 +351,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Aria Navarro',
-        voice: 'slt',
         topic: 'Scenic Bridge Crossing',
         text: 'Every curve reveals another hidden cove. Travelling with lightweight gear lets us capture moments without slowing down.',
         pauseAfterSec: 1.4,
@@ -385,7 +367,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Aria Navarro',
-        voice: 'slt',
         topic: 'Vlog Closing',
         text: 'Follow along for part two as we hike into the redwoods at dusk.',
         pauseAfterSec: 0.4,
@@ -418,7 +399,6 @@ const DEMO_SPECS: DemoSpec[] = [
     beats: [
       {
         speaker: 'Jordan Vance',
-        voice: 'awb',
         topic: 'Launch Hook',
         text: 'Meet Aether SE One. Cinema grade optics engineered into brushed titanium.',
         pauseAfterSec: 0.7,
@@ -435,7 +415,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Jordan Vance',
-        voice: 'awb',
         topic: 'Product Demonstration',
         text: 'Watch the autofocus lock instantly at sixty frames per second with zero focus breathing in low light.',
         pauseAfterSec: 1.2,
@@ -452,7 +431,6 @@ const DEMO_SPECS: DemoSpec[] = [
       },
       {
         speaker: 'Jordan Vance',
-        voice: 'awb',
         topic: 'Pricing & Disclaimer',
         text: 'Pre order today at twelve ninety nine. Limited launch pricing valid through December thirty first, terms apply.',
         pauseAfterSec: 0.4,
@@ -482,7 +460,7 @@ export function getDemoCatalogMeta() {
     thumbnailUrl: `/api/demos/${d.id}/thumb`,
     estimatedTranscriptCount: d.beats.length,
     estimatedDurationSec: Math.round(
-      d.beats.reduce((sum, b) => sum + Math.max(4, b.text.split(/\s+/).length * 0.42) + (b.pauseAfterSec || 0), 0) * 10,
+      d.beats.reduce((sum, b, i) => sum + narrationTimings[d.id][i] + (b.pauseAfterSec || 0), 0) * 10,
     ) / 10,
   }));
 }
@@ -491,47 +469,6 @@ export function getDemoThumbnailFallbackPath(demoId: string): string | null {
   const spec = DEMO_SPECS.find((d) => d.id === demoId);
   if (!spec) return null;
   return fs.existsSync(spec.imagePath) ? spec.imagePath : null;
-}
-
-async function synthesizeSpeechWav(text: string, voice: string, outWav: string): Promise<number> {
-  const safeText = text.replace(/['":;\\]/g, ' ').replace(/\s+/g, ' ').trim();
-  await execFileAsync('ffmpeg', [
-    '-y',
-    '-f',
-    'lavfi',
-    '-i',
-    `flite=text='${safeText}':voice=${voice}`,
-    '-af',
-    'loudnorm=I=-14:TP=-1.5:LRA=7',
-    '-ar',
-    '24000',
-    '-ac',
-    '1',
-    outWav,
-  ]);
-  const { stdout } = await execFileAsync('ffprobe', [
-    '-v',
-    'error',
-    '-show_entries',
-    'format=duration',
-    '-of',
-    'default=noprint_wrappers=1:nokey=1',
-    outWav,
-  ]);
-  return Math.max(0.5, parseFloat(stdout.trim()) || 2.0);
-}
-
-async function generateSilenceWav(durationSec: number, outWav: string): Promise<void> {
-  await execFileAsync('ffmpeg', [
-    '-y',
-    '-f',
-    'lavfi',
-    '-i',
-    'anullsrc=r=24000:cl=mono',
-    '-t',
-    durationSec.toFixed(3),
-    outWav,
-  ]);
 }
 
 function buildWordsForText(
@@ -593,7 +530,7 @@ let demoInitPromise: Promise<void> | null = null;
 const singleDemoPromises = new Map<string, Promise<void>>();
 
 async function buildSingleDemo(spec: DemoSpec): Promise<void> {
-  const videoOut = path.join(DEMOS_DIR, `${spec.id}.mp4`);
+  const videoOut = path.join(DEMOS_DIR, `${spec.id}-narrated.mp4`);
   const thumbOut = path.join(THUMBS_DIR, `${spec.id}.jpg`);
   const workDir = path.join(DEMOS_DIR, `_tmp_${spec.id}`);
 
@@ -663,7 +600,7 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
     ]);
   }
 
-  const audioParts: string[] = [];
+  const narrationPath = path.resolve('src/assets/audio', spec.id + '.mp3');
   const videoParts: string[] = [];
   const transcript: TranscriptSegment[] = [];
   const scenes: SceneInfo[] = [];
@@ -676,26 +613,18 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
 
   for (let i = 0; i < spec.beats.length; i++) {
     const beat = spec.beats[i];
-    const speechWav = path.join(workDir, `speech_${i}.wav`);
-    const speechDur = await synthesizeSpeechWav(beat.text, beat.voice, speechWav);
+    const speechDur = narrationTimings[spec.id][i];
     const beatStart = Math.round(cursor * 1000) / 1000;
     const beatEnd = Math.round((cursor + speechDur) * 1000) / 1000;
 
-    audioParts.push(speechWav);
-
     const pauseDur = beat.pauseAfterSec || 0;
-    if (pauseDur > 0.05) {
-      const silWav = path.join(workDir, `silence_${i}.wav`);
-      await generateSilenceWav(pauseDur, silWav);
-      audioParts.push(silWav);
-      if (pauseDur >= 0.8) {
-        silences.push({
-          id: `sil-${spec.id}-${i + 1}`,
-          start: beatEnd,
-          end: Math.round((beatEnd + pauseDur) * 1000) / 1000,
-          duration: Math.round(pauseDur * 1000) / 1000,
-        });
-      }
+    if (pauseDur >= 0.8) {
+      silences.push({
+        id: `sil-${spec.id}-${i + 1}`,
+        start: beatEnd,
+        end: Math.round((beatEnd + pauseDur) * 1000) / 1000,
+        duration: Math.round(pauseDur * 1000) / 1000,
+      });
     }
 
     const totalClipDur = speechDur + pauseDur;
@@ -790,26 +719,6 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
     cursor += totalClipDur;
   }
 
-  // Concat audio WAVs cleanly
-  const audioListPath = path.join(workDir, 'audio_list.txt');
-  fs.writeFileSync(
-    audioListPath,
-    audioParts.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n'),
-  );
-  const fullAudioWav = path.join(workDir, 'full_audio.wav');
-  await execFileAsync('ffmpeg', [
-    '-y',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    audioListPath,
-    '-c:a',
-    'pcm_s16le',
-    fullAudioWav,
-  ]);
-
   // Concat video clips cleanly
   const videoListPath = path.join(workDir, 'video_list.txt');
   fs.writeFileSync(
@@ -836,7 +745,7 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
     '-i',
     fullVideoOnly,
     '-i',
-    fullAudioWav,
+    narrationPath,
     '-c:v',
     'copy',
     '-c:a',
@@ -918,9 +827,10 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
 
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT OR REPLACE INTO media_assets
+    `INSERT INTO media_assets
      (id, user_id, guest_token, source_type, filename, mime_type, file_path, thumbnail_url, duration_sec, width, height, has_audio, analysis_mode, analysis_json, created_at)
-     VALUES (?, NULL, NULL, 'demo', ?, 'video/mp4', ?, ?, ?, 1280, 720, 1, 'local-ffmpeg', ?, ?)`,
+     VALUES (?, NULL, NULL, 'demo', ?, 'video/mp4', ?, ?, ?, 1280, 720, 1, 'local-ffmpeg', ?, ?)
+     ON CONFLICT(id) DO UPDATE SET file_path=excluded.file_path, duration_sec=excluded.duration_sec, thumbnail_url=excluded.thumbnail_url, analysis_json=excluded.analysis_json`,
   ).run(
     spec.id,
     `${spec.id}.mp4`,
