@@ -50,6 +50,7 @@ export function apiUrl(urlPath: string): string {
   if (!urlPath) return urlPath;
   if (/^(https?:|blob:|data:)/i.test(urlPath)) return urlPath;
   const normalizedPath = urlPath.startsWith('/') ? urlPath : `/${urlPath}`;
+  if (discoverWorker && normalizedPath==='/api/ai/plan' && getAuthToken()) return '/api/assistant';
   if (!API_BASE_URL || !normalizedPath.startsWith('/api/')) return normalizedPath;
   if (API_BASE_URL === '/api' && (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))) {
     return normalizedPath;
@@ -119,7 +120,6 @@ import {
   fallbackListDemos,
   fallbackListLanguages,
   fallbackListProjects,
-  fallbackPlanAiEdit,
   fallbackRegenerateVersions,
   fallbackSearchProject,
   fallbackStartExport,
@@ -379,6 +379,19 @@ export const api = {
       return fallbackIngestLocalMedia(file, filename, sourceType, title, onProgress);
     }
 
+    const blocks:Uint8Array[]=[];
+    const blockSize=4*1024*1024;
+    for (let start=0;start<file.size;start+=blockSize) {
+      const bytes=await file.slice(start,start+blockSize).arrayBuffer();
+      blocks.push(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
+    }
+    const hashes=new Uint8Array(blocks.length*32);
+    blocks.forEach((b,i)=>hashes.set(b,i*32));
+    const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',hashes));
+    const fingerprint=Array.from(digest,b=>b.toString(16).padStart(2,'0')).join('');
+    const reused=await requestJson<{project:HydratedProject|null}>('/api/media/reuse',{method:'POST',body:JSON.stringify({fingerprint,title,...options})});
+    if (reused.project) {onProgress(100);return reused.project;}
+
     // Strategy 1: Direct client-to-Vercel-Blob multipart upload (supports up to 2 GB cleanly on Vercel)
     if (caps?.blobStorageConfigured) {
       try {
@@ -389,10 +402,10 @@ export const api = {
           multipart: true,
           headers: buildHeaders(),
           onUploadProgress: (evt) => {
-            onProgress(Math.min(78, Math.max(2, Math.round(evt.percentage * 0.78))));
+            onProgress(Math.round(evt.percentage));
           },
         });
-        onProgress(82);
+        onProgress(100);
         const res = await requestJson<{ project: HydratedProject }>('/api/media/ingest-blob', {
           method: 'POST',
           body: JSON.stringify({
@@ -412,7 +425,7 @@ export const api = {
         onProgress(100);
         return res.project;
       } catch (blobErr) {
-        console.warn('Direct Blob multipart fallback to chunked/server ingest:', blobErr);
+        throw blobErr;
       }
     }
 
@@ -439,49 +452,40 @@ export const api = {
       });
 
       try {
-        let uploadedBytes = 0;
-        for (let partIndex = 0; partIndex < init.totalParts; partIndex++) {
-          const start = partIndex * init.chunkSizeBytes;
-          const end = Math.min(file.size, start + init.chunkSizeBytes);
-          const slice = file.slice(start, end);
-
-          let attempt = 0;
-          let sent = false;
-          let lastErr: unknown;
-          while (attempt < 3 && !sent) {
-            attempt++;
-            try {
-              const partRes = await fetch(
-                apiUrl(`/api/uploads/multipart/${init.uploadId}/part/${partIndex}`),
-                {
-                  method: 'PUT',
-                  credentials: 'include',
-                  headers: buildHeaders({ 'Content-Type': 'application/octet-stream' }),
-                  body: slice,
-                },
-              );
-              if (!partRes.ok) {
-                const errJson = await partRes.json().catch(() => ({}));
-                throw new Error(
-                  (errJson as { error?: string }).error || `Chunk ${partIndex + 1} failed (${partRes.status})`,
-                );
-              }
-              sent = true;
-            } catch (err) {
-              lastErr = err;
-              if (attempt < 3) {
-                await new Promise((r) => setTimeout(r, 400 * attempt));
+        const bytes=Array(init.totalParts).fill(0) as number[];
+        let cursor=0;
+        const uploadParts=async()=>{
+          while(cursor<init.totalParts) {
+            const index=cursor++;
+            const part=file.slice(index*init.chunkSizeBytes,(index+1)*init.chunkSizeBytes);
+            const progress=(loaded:number)=>{
+              bytes[index]=loaded;
+              onProgress(Math.floor(bytes.reduce((a,b)=>a+b,0)*100/file.size));
+            };
+            for (let attempt=1;;attempt++) {
+              try {
+                await new Promise<void>((resolve,reject)=>{
+                  const xhr=new XMLHttpRequest();
+                  xhr.open('PUT',apiUrl(`/api/uploads/multipart/${init.uploadId}/part/${index}`));
+                  xhr.withCredentials=true;
+                  Object.entries(buildHeaders({'Content-Type':'application/octet-stream'})).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+                  xhr.upload.onprogress=e=>progress(e.loaded);
+                  xhr.onerror=()=>reject(new Error('Network error sending video part '+(index+1)));
+                  xhr.onload=()=>xhr.status>=200 && xhr.status<300 ? resolve():reject(new Error('Upload part '+(index+1)+' failed ('+xhr.status+').'));
+                  xhr.send(part);
+                });
+                progress(part.size);
+                break;
+              } catch(e) {
+                progress(0);
+                if (attempt>=3) throw e;
+                await new Promise(r=>setTimeout(r,400*attempt));
               }
             }
           }
-          if (!sent) {
-            throw lastErr instanceof Error ? lastErr : new Error('Multipart chunk upload failed.');
-          }
-          uploadedBytes += end - start;
-          onProgress(Math.min(80, Math.max(2, Math.round((uploadedBytes / file.size) * 80))));
-        }
-
-        onProgress(86);
+        };
+        const parts=await Promise.allSettled(Array.from({length:Math.min(3,init.totalParts)},uploadParts));
+        for (const result of parts) if(result.status==='rejected') throw result.reason;
         const completed = await requestJson<{ project: HydratedProject }>(
           `/api/uploads/multipart/${init.uploadId}/complete`,
           { method: 'POST', body: JSON.stringify({}) },
@@ -508,7 +512,7 @@ export const api = {
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
-          onProgress(Math.min(75, Math.round((e.loaded / e.total) * 75)));
+          onProgress(Math.floor((e.loaded / e.total) * 100));
         }
       };
 
@@ -671,21 +675,18 @@ export const api = {
       isLocalFallbackId(projectId),
     ),
 
-  planAiEdit: (projectId: string, prompt: string, currentState: ProjectState) =>
-    withStaticFallback(
-      () =>
-        requestJson<{
+  planAiEdit: (projectId: string, prompt: string, currentState: ProjectState, history: Array<{role:string;text:string;status?:string;ranges?:number[][]}> = []) =>
+    isLocalFallbackId(projectId)
+      ? Promise.reject(new Error('Open a server-backed project to use the editing assistant.'))
+      : requestJson<{
           plan: EditPlan;
           impact: EditImpactReport;
           searchHits: SearchHit[];
           stagesExecuted?: string[];
         }>('/api/ai/plan', {
           method: 'POST',
-          body: JSON.stringify({ projectId, prompt, currentState }),
+          body: JSON.stringify({ projectId, prompt, currentState: {...currentState,captions:undefined}, history }),
         }),
-      () => fallbackPlanAiEdit(projectId, prompt, currentState),
-      isLocalFallbackId(projectId),
-    ),
 
   reanalyzeMedia: (mediaId: string, projectId?: string) =>
     requestJson<{ job: AnalysisJob; analysis: MediaAnalysis; project: HydratedProject | null }>(

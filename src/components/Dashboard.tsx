@@ -164,7 +164,7 @@ export function Dashboard({
     if (!selectedFile) return;
     setUploadError(null);
     setUploadStatus('uploading');
-    setUploadProgress(5);
+    setUploadProgress(0);
     try {
       const project = await api.ingestMediaWithProgress(
         selectedFile,
@@ -173,7 +173,7 @@ export function Dashboard({
         uploadTitle.trim() || selectedFile.name,
         (pct) => {
           setUploadProgress(pct);
-          if (pct >= 75) setUploadStatus('analyzing');
+          if (pct >= 100) setUploadStatus('analyzing');
         },
       );
       await onRefreshProjects();

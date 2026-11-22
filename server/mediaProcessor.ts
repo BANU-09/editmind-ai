@@ -344,13 +344,14 @@ export function alignWordsWithAudioEnergy(
   return { words, fillers };
 }
 
-async function runSceneSelectFilter(filePath: string, threshold: number): Promise<number[]> {
+async function runSceneSelectFilter(filePath: string, threshold: number, keyframesOnly:boolean): Promise<number[]> {
   const times: number[] = [];
   const { stderr } = await execFileAsync('ffmpeg', [
+    ...(keyframesOnly?['-skip_frame','nokey']:[]),
     '-i',
     filePath,
-    '-vf',
-    `select='gt(scene,${threshold})',showinfo`,
+    '-an', '-sn', '-vf',
+     `fps=2,scale=160:-2,select='gt(scene,${threshold})',showinfo`,
     '-f',
     'null',
     '-',
@@ -373,11 +374,7 @@ async function detectSceneCutTimes(
   let detectedRawCount = 0;
 
   try {
-    let rawCuts = await runSceneSelectFilter(filePath, 0.18);
-    if (rawCuts.length === 0 && durationSec > 4) {
-      // Lower sensitivity for smooth webcam / UI screencast transitions
-      rawCuts = await runSceneSelectFilter(filePath, 0.1);
-    }
+    const rawCuts = await runSceneSelectFilter(filePath, 0.12, durationSec>300);
     detectedRawCount = rawCuts.length;
     rawCuts.sort((a, b) => a - b);
 
@@ -605,12 +602,7 @@ function syncFinalizedAnalysisToDb(
     mediaId,
   );
 
-  const projectRows = (
-    projectId
-      ? [db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId)].filter(Boolean)
-      : db.prepare('SELECT * FROM projects WHERE media_id = ?').all(mediaId)
-  ) as Array<Record<string, unknown>>;
-
+  const projectRows=db.prepare('SELECT * FROM projects WHERE media_id=?').all(mediaId) as Array<Record<string,unknown>>;
   const versions = generateThreeVersions(analysis);
   const now = new Date().toISOString();
 
@@ -646,12 +638,15 @@ function syncFinalizedAnalysisToDb(
       };
     }
 
+    const history=JSON.parse(String(proj.history_json)) as Array<{stateSnapshot:ProjectState;durationAfter:number}>;
+    if (isUntouchedDefault && history.length===1) history[0]={...history[0],stateSnapshot:nextState,durationAfter:nextState.duration};
     db.prepare(
-      `UPDATE projects SET thumbnail_url = ?, state_json = ?, versions_json = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE projects SET thumbnail_url = ?, state_json = ?, versions_json = ?, history_json = ?, updated_at = ? WHERE id = ?`,
     ).run(
       thumbnailUrl || (proj.thumbnail_url as string),
       JSON.stringify(nextState),
       JSON.stringify(versions),
+      JSON.stringify(history),
       now,
       proj.id as string,
     );
@@ -751,6 +746,9 @@ async function finalizeTranscriptionOutputs(params: {
     note = `Transcribed via ${providerSummary} across ${totalChunks} voice-aware chunk(s) (${dedupedWords.length} words with timestamps).`;
   }
 
+  const chunkLanguages=new Map(chunkStats.chunkOutputs.map(c=>[c.chunkId,c.language]));
+  for (const segment of built.transcript) segment.language=chunkLanguages.get(segment.chunkId||'') || primaryLang;
+
   const analysis: MediaAnalysis = {
     mediaId,
     durationSec: meta.durationSec,
@@ -818,10 +816,27 @@ async function finalizeTranscriptionOutputs(params: {
 
 const activeJobPromises = new Map<string, Promise<MediaAnalysis>>();
 
+let analysisQueue:Promise<void>=Promise.resolve();
+function enqueueAnalysis(id:string, options:ChunkWorkerOptions & {audioStreamIndex?:number}={}) {
+  const task=analysisQueue.then(()=>{
+    if (isJobCancelled(id)) throw new Error('Analysis cancelled.');
+    return executeAnalysisJob(id,options);
+  });
+  analysisQueue=task.then(()=>{},()=>{});
+  return task;
+}
+
 export async function executeAnalysisJob(
   jobId: string,
   options: ChunkWorkerOptions & { audioStreamIndex?: number } = {},
 ): Promise<MediaAnalysis> {
+  const started=performance.now();
+  const metrics:Record<string,number>={};
+  function measure(name:string,start:number) {
+    metrics[name]=Math.round(performance.now()-start);
+    metrics.processPeakRssKiB=process.resourceUsage().maxRSS;
+    db.prepare('UPDATE analysis_jobs SET metrics_json=? WHERE id=?').run(JSON.stringify(metrics),jobId);
+  }
   const cfg = getAppConfig();
   const job = getAnalysisJob(jobId);
   if (!job) throw new Error(`Analysis job ${jobId} not found`);
@@ -878,6 +893,7 @@ export async function executeAnalysisJob(
     overallProgress: 10,
   });
 
+  const sceneStarted=performance.now();
   const buildScenesPromise = (async (): Promise<SceneInfo[]> => {
     const { cutTimes, detectedCutsCount } = await detectSceneCutTimes(filePath, meta.durationSec);
     const builtScenes: SceneInfo[] = [];
@@ -904,7 +920,7 @@ export async function executeAnalysisJob(
       });
     }
     return enrichScenesWithVision(builtScenes, filename);
-  })();
+  })().then(scenes=>{measure('sceneIndexMs',sceneStarted);return scenes;});
 
   if (!meta.hasAudio) {
     const scenes = await buildScenesPromise;
@@ -953,6 +969,7 @@ export async function executeAnalysisJob(
     overallProgress: 14,
   });
 
+  const extractionStarted=performance.now();
   const { masterWavPath, silences, waveformPeaks } = await extractStreamWavAndSilences({
     mediaId: job.mediaId,
     filePath,
@@ -960,6 +977,8 @@ export async function executeAnalysisJob(
     durationSec: meta.durationSec,
   });
 
+  measure('audioExtractionMs',extractionStarted);
+  const prepStarted=performance.now();
   let existingChunks = db
     .prepare('SELECT * FROM transcription_chunks WHERE job_id = ? ORDER BY chunk_index ASC')
     .all(jobId) as Array<Record<string, unknown>>;
@@ -970,6 +989,7 @@ export async function executeAnalysisJob(
       minSec: cfg.chunkMinSec,
       maxSec: cfg.chunkMaxSec,
       overlapSec: cfg.chunkOverlapSec,
+      preferPhraseBoundaries: effectiveLangOverride === 'auto',
     });
     const prepared = await sliceChunkAudioFiles({
       mediaId: job.mediaId,
@@ -1003,6 +1023,12 @@ export async function executeAnalysisJob(
       .all(jobId) as Array<Record<string, unknown>>;
   }
 
+  const missing=existingChunks.filter(r=>r.status!=='completed' && !fs.existsSync(String(r.wav_path)));
+  if (missing.length) {
+    const prepared=await sliceChunkAudioFiles({mediaId:job.mediaId,jobId,masterWavPath,chunks:missing.map(r=>({index:Number(r.chunk_index),sourceStart:Number(r.source_start),sourceEnd:Number(r.source_end),overlapBefore:Number(r.overlap_before),overlapAfter:Number(r.overlap_after)}))});
+    const update=db.prepare('UPDATE transcription_chunks SET wav_path=?,compressed_path=? WHERE job_id=? AND chunk_index=?');
+    for (const p of prepared) update.run(p.wavPath,p.compressedPath,jobId,p.chunk.index);
+  }
   updateAnalysisJobRow(jobId, {
     status: 'transcribing',
     audioExtractionStatus: 'completed',
@@ -1011,19 +1037,22 @@ export async function executeAnalysisJob(
     overallProgress: 25,
   });
 
+  measure('chunkPreparationMs',prepStarted);
+  const sttStarted=performance.now();
   const [chunkStats, scenes] = await Promise.all([
     processChunksForJob(jobId, {
       ...options,
       vocabulary: mergedVocab,
       languageOverride: effectiveLangOverride,
-    }),
+    }).then(result=>{measure('transcriptionMs',sttStarted);return result;}),
     buildScenesPromise,
   ]);
   if (isJobCancelled(jobId)) {
     throw new Error('Analysis job cancelled by user.');
   }
 
-  return finalizeTranscriptionOutputs({
+  const captionStarted=performance.now();
+  const finalized=await finalizeTranscriptionOutputs({
     jobId,
     mediaId: job.mediaId,
     projectId: job.projectId,
@@ -1039,6 +1068,9 @@ export async function executeAnalysisJob(
     waveformPeaks,
     chunkStats,
   });
+  measure('captionAndFinalizeMs',captionStarted);
+  measure('totalAnalysisMs',started);
+  return finalized;
 }
 
 export function startBackgroundAnalysisJob(params: {
@@ -1061,7 +1093,7 @@ export function startBackgroundAnalysisJob(params: {
   ).run(jobId, params.mediaId, params.projectId, streamIdx, langOverride, now, now);
 
   const job = getAnalysisJob(jobId)!;
-  const promise = executeAnalysisJob(jobId, {
+  const promise = enqueueAnalysis(jobId, {
     ...params.options,
     audioStreamIndex: streamIdx,
     languageOverride: langOverride,
@@ -1143,8 +1175,9 @@ export function resumeIncompleteAnalysisJobs() {
 
   for (const r of rows) {
     if (!activeJobPromises.has(r.id)) {
-      const p = executeAnalysisJob(r.id)
+      const p = enqueueAnalysis(r.id)
         .catch((err) => {
+          if (!isJobCancelled(r.id)) updateAnalysisJobRow(r.id,{status:'failed',transcriptionStatus:'failed',error:String(err).slice(0,260)});
           console.warn(`[transcriber] Resume job ${r.id} failed:`, err instanceof Error ? err.message : err);
           return null as unknown as MediaAnalysis;
         })

@@ -65,6 +65,8 @@ export function VirtualVideoPlayer({
   const bleepOscRef = useRef<OscillatorNode | null>(null);
   const bleepGainRef = useRef<GainNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  const emittedTime = useRef(-1);
+  const previousVolume = useRef(1);
   const lastFrameTsRef = useRef<number>(0);
 
   const [globalSpeedMult, setGlobalSpeedMult] = useState(1);
@@ -214,7 +216,7 @@ export function VirtualVideoPlayer({
     vid.muted = shouldMute;
     vid.volume = Math.min(1, Math.max(0, volume * segment.volume * state.audio.masterVolume));
 
-    if (Math.abs(vid.currentTime - position.time) > 0.18) {
+    if ((videoFailed || currentTime !== emittedTime.current) && Math.abs(vid.currentTime - position.time) > (videoFailed ? 0.18 : 0.015)) {
       try {
         vid.currentTime = position.time;
       } catch {
@@ -314,11 +316,38 @@ export function VirtualVideoPlayer({
       if (!lastFrameTsRef.current) {
         lastFrameTsRef.current = now;
       }
+      if (now-lastFrameTsRef.current<45 && now!==lastFrameTsRef.current) {
+        rafRef.current=requestAnimationFrame(step);
+        return;
+      }
       const dtSec = Math.min(0.1, (now - lastFrameTsRef.current) / 1000);
       lastFrameTsRef.current = now;
 
       const totalDur = stateRef.current.duration;
-      const nextTime = timeRef.current + dtSec * globalSpeedMult;
+      let nextTime = timeRef.current + dtSec * globalSpeedMult;
+      const video = videoRef.current;
+      if (!videoFailed && video) {
+        const segments = stateRef.current.segments;
+        const active = mapTimelineTimeToSource(segments,timeRef.current)?.segment;
+        if (!active || video.seeking || (video.readyState < 2 && !video.ended)) {
+          rafRef.current=requestAnimationFrame(step);
+          return;
+        }
+        if (video.currentTime >= active.sourceEnd || video.ended) {
+          const following=segments[segments.findIndex(s=>s.id===active.id)+1];
+          if (following) {
+            if (Math.abs(following.sourceStart-active.sourceEnd)>.002 || video.ended) {
+              video.currentTime=following.sourceStart;
+              if (video.paused) void video.play().catch(()=>onPlayingChange(false));
+            }
+            nextTime=following.timelineStart+0.00001;
+          } else nextTime=totalDur;
+        } else {
+          nextTime=active.timelineStart+Math.max(0,video.currentTime-active.sourceStart)/active.speed;
+        }
+      }
+      emittedTime.current=nextTime;
+      timeRef.current=nextTime;
 
       if (nextTime >= totalDur) {
         onTimeChange(0);
@@ -334,7 +363,7 @@ export function VirtualVideoPlayer({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isPlaying, globalSpeedMult, onTimeChange, onPlayingChange]);
+  }, [isPlaying, videoFailed, globalSpeedMult, onTimeChange, onPlayingChange]);
 
   const handleFullscreen = () => {
     const el = containerRef.current;
@@ -584,7 +613,7 @@ export function VirtualVideoPlayer({
             <button
               type="button"
               aria-label={volume === 0 ? 'Unmute preview audio' : 'Mute preview audio'}
-              onClick={() => setVolume((v) => (v === 0 ? 1 : 0))}
+              onClick={() => { if (volume>0) previousVolume.current=volume; setVolume(volume===0 ? previousVolume.current : 0); }}
               className="rounded-lg border border-white/10 bg-slate-900 p-1.5 text-slate-300 hover:text-white cursor-pointer"
             >
               {volume === 0 || state.audio.muted ? (

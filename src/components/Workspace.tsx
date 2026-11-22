@@ -78,14 +78,6 @@ interface ChatMessage {
   status?: 'pending' | 'applied' | 'cancelled' | 'clarification' | 'error';
 }
 
-const PROCESSING_STAGES = [
-  'Understanding request',
-  'Searching video',
-  'Finding timestamps',
-  'Preparing edit',
-  'Preview ready',
-];
-
 const SUGGESTED_PROMPTS = [
   'Remove unnecessary pauses.',
   'Remove filler words.',
@@ -223,7 +215,10 @@ function WorkspaceInner({
   // Sync latest background analysis job & auto-poll until transcription finishes
   useEffect(() => {
     let cancelled = false;
+    let polling = false;
     const syncOnce = async () => {
+      if (polling) return;
+      polling=true;
       try {
         const res = await api.getProjectAnalysisStatus(project.id);
         if (cancelled) return;
@@ -233,6 +228,7 @@ function WorkspaceInner({
           if (!isJobActiveStatus(res.analysis.transcriptionStatus)) {
             onProjectUpdatedRef.current(res.project);
             setVersions(res.project.versions);
+            if (res.project.history.length===1) setHistory(prev=>prev.length===1?res.project.history:prev);
             // If user hasn't customized timeline yet, seamlessly populate newly transcribed segments & captions
             setState((prev) => {
               const wasUntouchedSingle =
@@ -264,8 +260,8 @@ function WorkspaceInner({
           }
         }
       } catch {
-        // Ignore transient poll errors
-      }
+        // Retry on the next poll.
+      } finally { polling=false; }
     };
 
     void syncOnce();
@@ -276,7 +272,7 @@ function WorkspaceInner({
     }
     const timer = window.setInterval(() => {
       void syncOnce();
-    }, 900);
+    }, 1800);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -286,7 +282,6 @@ function WorkspaceInner({
   // Right AI Assistant
   const [promptInput, setPromptInput] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
-  const [activeStageIdx, setActiveStageIdx] = useState(0);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const formatWelcomeText = (a: MediaAnalysis) => {
     const wordTotal =
@@ -324,17 +319,6 @@ function WorkspaceInner({
   }, [messages, aiBusy]);
 
   // Animated stage progression while planning AI edit
-  useEffect(() => {
-    if (!aiBusy) {
-      setActiveStageIdx(0);
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setActiveStageIdx((idx) => Math.min(PROCESSING_STAGES.length - 2, idx + 1));
-    }, 450);
-    return () => window.clearInterval(timer);
-  }, [aiBusy]);
-
   // Modals
   const [activeModal, setActiveModal] = useState<
     null | 'search' | 'protection' | 'versions' | 'history' | 'export' | 'vocabulary'
@@ -438,7 +422,7 @@ function WorkspaceInner({
     scheduleAutosave(title, snap, history, targetIdx, versions);
   }, [historyIndex, history, scheduleAutosave, title, versions]);
 
-  const handleJumpToSourceTime = (sourceTime: number) => {
+  const handleJumpToSourceTime = useCallback((sourceTime: number) => {
     const tl = mapSourceTimeToTimeline(state.segments, sourceTime);
     if (tl !== null) {
       setCurrentTime(tl);
@@ -447,7 +431,7 @@ function WorkspaceInner({
       );
       if (seg) setSelectedSegmentId(seg.id);
     }
-  };
+  }, [state.segments]);
 
   const handleRetryAnalysis = async () => {
     if (reanalyzing) return;
@@ -679,17 +663,23 @@ function WorkspaceInner({
     const userMsgId = `msg-u-${Date.now()}`;
     setMessages((prev) => [...prev, { id: userMsgId, role: 'user', text }]);
     setAiBusy(true);
-    setActiveStageIdx(0);
 
     try {
       const { plan, impact, searchHits, stagesExecuted } = await api.planAiEdit(
         project.id,
         text,
         state,
+        messages.filter(m=>m.id!=='welcome').slice(-24).map(m=>({role:m.role,text:m.text,status:m.status,
+          ranges:m.plan?.operations.flatMap(op=>op.sourceStart!==undefined && op.sourceEnd!==undefined?[[op.sourceStart,op.sourceEnd]]:(op.removeRanges||op.keepRanges||[]).map(r=>[r.start,r.end]))})),
       );
 
       // Handle Undo prompt
-      if (/\bundo\b/i.test(text) && plan.operations.length === 0) {
+      if (plan.historyAction==='redo') {
+        if (historyIndex < history.length-1) handleRedo();
+        setMessages(prev=>[...prev,{id:'redo-'+Date.now(),role:'assistant',text:historyIndex<history.length-1?'Redid the next timeline edit.':'There is no edit to redo.'}]);
+        return;
+      }
+      if (plan.historyAction==='undo' || (/^undo[.!]?$/i.test(text) && plan.operations.length === 0)) {
         if (historyIndex > 0) {
           handleUndo();
           setMessages((prev) => [
@@ -737,10 +727,7 @@ function WorkspaceInner({
           {
             id: `msg-a-${Date.now()}`,
             role: 'assistant',
-            text:
-              searchHits.length > 0
-                ? `Found ${searchHits.length} matching moment(s) for "${plan.searchQuery}". Click any timestamp below to jump directly there.`
-                : `No matches found for "${plan.searchQuery}" in this video.`,
+            text: plan.intentSummary,
             searchHits,
             stages: stagesExecuted,
           },
@@ -779,18 +766,7 @@ function WorkspaceInner({
 
       const isDestructive =
         impact.hasProtectedCollision ||
-        Boolean(plan.requiresUncertainConfirmation) ||
-        impact.durationDelta < -0.5 ||
-        plan.operations.some((op) =>
-          [
-            'REMOVE_RANGE',
-            'REMOVE_WORD',
-            'KEEP_ONLY_RANGE',
-            'CREATE_DURATION_CUT',
-            'REMOVE_SILENCES',
-            'REMOVE_FILLERS',
-          ].includes(op.type),
-        );
+        Boolean(plan.requiresUncertainConfirmation);
 
       if (isDestructive) {
         setMessages((prev) => [
@@ -807,6 +783,7 @@ function WorkspaceInner({
         ]);
       } else {
         const res = applyEditPlan(state, analysis, plan);
+        if (!res.appliedCount || JSON.stringify(res.nextState)===JSON.stringify(state)) throw new Error('This change is already applied or has no effect on the remaining timeline.');
         commitStateChange(res.nextState, plan.operations[0]?.label || 'AI Edit', text);
         setMessages((prev) => [
           ...prev,
@@ -968,6 +945,101 @@ function WorkspaceInner({
       return true;
     });
   }, [analysis.transcript, selectedSpeaker, transcriptFilter]);
+
+  // Thousands of word buttons retain the same mapping as the playhead moves.
+  const transcriptRows = useMemo(() => filteredTranscript.map((tr) => {
+                    const tlTime = mapSourceTimeToTimeline(state.segments, tr.start + 0.05);
+                    const isCut = tlTime === null;
+                    const translatedSeg =
+                      activeTranslationLang &&
+                      analysis.translationTracks?.[activeTranslationLang]?.segments.find(
+                        (s) => s.segmentId === tr.id,
+                      );
+                    return (
+                      <div
+                        key={tr.id}
+                        className={`rounded-xl border p-3 text-xs space-y-1.5 transition-colors ${
+                          isCut
+                            ? 'border-white/5 bg-slate-950/40 opacity-50'
+                            : 'border-white/10 bg-[#0B1024] hover:border-cyan-400/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-cyan-300">{tr.speaker}</span>
+                          <button
+                            type="button"
+                            disabled={isCut}
+                            onClick={() => {
+                              if (tlTime !== null) handleJumpToSourceTime(tr.start + 0.05);
+                            }}
+                            className="font-mono text-[11px] text-violet-300 hover:underline disabled:no-underline cursor-pointer"
+                          >
+                            {isCut ? `Removed (${formatTimecode(tr.start)})` : formatTimecode(tlTime)}
+                          </button>
+                        </div>
+                        <div className="text-[11px] font-medium text-slate-400">
+                          <HighlightedText text={tr.topic} query={transcriptFilter} />
+                          {tr.isImportant && (
+                            <span className="text-amber-300"> · Protected ({tr.importantCategory})</span>
+                          )}
+                        </div>
+                        {tr.words && tr.words.length > 0 && !transcriptFilter.trim() ? (
+                          <div className="flex flex-wrap gap-x-1 gap-y-0.5 leading-relaxed text-slate-200">
+                            {tr.words.map((w) => {
+                              const wordInTimeline =
+                                mapSourceTimeToTimeline(state.segments, (w.start + w.end) / 2) !==
+                                null;
+                              const isSelectedWord = selectedWord?.word.id === w.id;
+                              const isUnclear = w.verificationStatus === 'unclear_audio';
+                              const isReview = w.verificationStatus === 'review_needed';
+                              return (
+                                <button
+                                  key={w.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedWord({ word: w, topic: tr.topic })
+                                  }
+                                  title={`${formatTimecode(w.start)}–${formatTimecode(w.end)} · ${
+                                    isUnclear
+                                      ? 'Unclear audio — click to replay & verify'
+                                      : isReview
+                                        ? 'Needs review — click to replay & verify'
+                                        : 'Verified — click to inspect or edit'
+                                  }`}
+                                  className={`rounded-xs px-0.5 transition-colors cursor-pointer ${
+                                    !wordInTimeline
+                                      ? 'line-through text-slate-500'
+                                      : isSelectedWord
+                                        ? 'bg-cyan-400/35 text-white ring-1 ring-cyan-400'
+                                        : isUnclear
+                                          ? 'underline decoration-dotted decoration-rose-400 text-rose-100 hover:bg-rose-500/20'
+                                          : isReview
+                                            ? 'underline decoration-dotted decoration-amber-400 text-amber-100 hover:bg-amber-500/20'
+                                            : w.manuallyEdited
+                                              ? 'text-emerald-200 underline decoration-emerald-400/60 hover:bg-emerald-500/20'
+                                              : w.isFiller
+                                                ? 'text-amber-300 hover:bg-amber-500/20'
+                                                : 'hover:bg-cyan-500/20 hover:text-cyan-100'
+                                  }`}
+                                >
+                                  {w.word}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-slate-200 leading-relaxed select-text">
+                            <HighlightedText text={tr.text} query={transcriptFilter} />
+                          </p>
+                        )}
+                        {translatedSeg && (
+                          <p className="text-[11px] text-emerald-300/90 border-t border-white/10 pt-1">
+                            {translatedSeg.text}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }), [filteredTranscript, state.segments, activeTranslationLang, analysis.translationTracks, transcriptFilter, selectedWord, handleJumpToSourceTime]);
 
   const handleGenerateCaptions = () => {
     const res = applyEditPlan(state, analysis, {
@@ -1605,99 +1677,7 @@ function WorkspaceInner({
                     </button>
                   </div>
                 ) : (
-                  filteredTranscript.map((tr) => {
-                    const tlTime = mapSourceTimeToTimeline(state.segments, tr.start + 0.05);
-                    const isCut = tlTime === null;
-                    const translatedSeg =
-                      activeTranslationLang &&
-                      analysis.translationTracks?.[activeTranslationLang]?.segments.find(
-                        (s) => s.segmentId === tr.id,
-                      );
-                    return (
-                      <div
-                        key={tr.id}
-                        className={`rounded-xl border p-3 text-xs space-y-1.5 transition-colors ${
-                          isCut
-                            ? 'border-white/5 bg-slate-950/40 opacity-50'
-                            : 'border-white/10 bg-[#0B1024] hover:border-cyan-400/40'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-cyan-300">{tr.speaker}</span>
-                          <button
-                            type="button"
-                            disabled={isCut}
-                            onClick={() => {
-                              if (tlTime !== null) handleJumpToSourceTime(tr.start + 0.05);
-                            }}
-                            className="font-mono text-[11px] text-violet-300 hover:underline disabled:no-underline cursor-pointer"
-                          >
-                            {isCut ? `Removed (${formatTimecode(tr.start)})` : formatTimecode(tlTime)}
-                          </button>
-                        </div>
-                        <div className="text-[11px] font-medium text-slate-400">
-                          <HighlightedText text={tr.topic} query={transcriptFilter} />
-                          {tr.isImportant && (
-                            <span className="text-amber-300"> · Protected ({tr.importantCategory})</span>
-                          )}
-                        </div>
-                        {tr.words && tr.words.length > 0 && !transcriptFilter.trim() ? (
-                          <div className="flex flex-wrap gap-x-1 gap-y-0.5 leading-relaxed text-slate-200">
-                            {tr.words.map((w) => {
-                              const wordInTimeline =
-                                mapSourceTimeToTimeline(state.segments, (w.start + w.end) / 2) !==
-                                null;
-                              const isSelectedWord = selectedWord?.word.id === w.id;
-                              const isUnclear = w.verificationStatus === 'unclear_audio';
-                              const isReview = w.verificationStatus === 'review_needed';
-                              return (
-                                <button
-                                  key={w.id}
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedWord({ word: w, topic: tr.topic })
-                                  }
-                                  title={`${formatTimecode(w.start)}–${formatTimecode(w.end)} · ${
-                                    isUnclear
-                                      ? 'Unclear audio — click to replay & verify'
-                                      : isReview
-                                        ? 'Needs review — click to replay & verify'
-                                        : 'Verified — click to inspect or edit'
-                                  }`}
-                                  className={`rounded-xs px-0.5 transition-colors cursor-pointer ${
-                                    !wordInTimeline
-                                      ? 'line-through text-slate-500'
-                                      : isSelectedWord
-                                        ? 'bg-cyan-400/35 text-white ring-1 ring-cyan-400'
-                                        : isUnclear
-                                          ? 'underline decoration-dotted decoration-rose-400 text-rose-100 hover:bg-rose-500/20'
-                                          : isReview
-                                            ? 'underline decoration-dotted decoration-amber-400 text-amber-100 hover:bg-amber-500/20'
-                                            : w.manuallyEdited
-                                              ? 'text-emerald-200 underline decoration-emerald-400/60 hover:bg-emerald-500/20'
-                                              : w.isFiller
-                                                ? 'text-amber-300 hover:bg-amber-500/20'
-                                                : 'hover:bg-cyan-500/20 hover:text-cyan-100'
-                                  }`}
-                                >
-                                  {w.word}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-slate-200 leading-relaxed select-text">
-                            <HighlightedText text={tr.text} query={transcriptFilter} />
-                          </p>
-                        )}
-                        {translatedSeg && (
-                          <p className="text-[11px] text-emerald-300/90 border-t border-white/10 pt-1">
-                            {translatedSeg.text}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })
+                  transcriptRows
                 )}
               </div>
             </div>
@@ -2245,24 +2225,9 @@ function WorkspaceInner({
               >
                 <div className="flex items-center gap-2 font-semibold text-cyan-200">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
-                  <span>{PROCESSING_STAGES[activeStageIdx]}...</span>
+                  <span>Waiting for the editing assistant…</span>
                 </div>
-                <div className="space-y-1 text-[10px] font-mono">
-                  {PROCESSING_STAGES.map((stage, i) => (
-                    <div
-                      key={stage}
-                      className={
-                        i < activeStageIdx
-                          ? 'text-emerald-300'
-                          : i === activeStageIdx
-                            ? 'text-cyan-300 font-bold'
-                            : 'text-slate-500'
-                      }
-                    >
-                      {i < activeStageIdx ? '✓' : i === activeStageIdx ? '›' : '·'} {stage}
-                    </div>
-                  ))}
-                </div>
+
               </div>
             )}
 

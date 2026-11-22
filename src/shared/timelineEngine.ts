@@ -86,8 +86,8 @@ export function createInitialProjectState(analysis: MediaAnalysis): ProjectState
           return {
             id: `seg-init-${idx + 1}`,
             sourceSegmentId: t.id,
-            sourceStart: t.start,
-            sourceEnd: t.end,
+            sourceStart: idx === 0 ? 0 : t.start,
+            sourceEnd: analysis.transcript[idx + 1]?.start ?? analysis.durationSec,
             timelineStart: t.start,
             timelineEnd: t.end,
             speed: 1,
@@ -223,7 +223,7 @@ export function mapTimelineTimeToSource(
 ): { segment: TimelineSegment; sourceTime: number } | null {
   if (segments.length === 0) return null;
   for (const seg of segments) {
-    if (timelineTime >= seg.timelineStart - 0.001 && timelineTime <= seg.timelineEnd + 0.001) {
+    if (timelineTime >= seg.timelineStart && timelineTime < seg.timelineEnd) {
       const clamped = Math.min(seg.timelineEnd, Math.max(seg.timelineStart, timelineTime));
       const sourceTime = seg.sourceStart + (clamped - seg.timelineStart) * (seg.speed || 1);
       return {
@@ -233,7 +233,7 @@ export function mapTimelineTimeToSource(
     }
   }
   const last = segments[segments.length - 1];
-  if (timelineTime > last.timelineEnd) {
+  if (timelineTime >= last.timelineEnd) {
     return { segment: last, sourceTime: last.sourceEnd };
   }
   return { segment: segments[0], sourceTime: segments[0].sourceStart };
@@ -282,6 +282,7 @@ export function projectCaptionsToTimeline(state: ProjectState): ProjectedCaption
           };
         });
 
+      if (cap.words.length && !wordsInSeg.length) continue;
       if (isWordMode && wordsInSeg.length > 0) {
         // Group into punchy 1-3 word blocks for crisp TikTok/Reels style word-level caption display
         const chunkSize = 2;
@@ -582,23 +583,17 @@ function getRemovedRangesForOperations(
       op.removeRanges
     ) {
       for (const r of op.removeRanges) removed.push({ start: r.start, end: r.end });
-    } else if (op.type === 'KEEP_ONLY_RANGE' && op.keepRanges) {
-      for (const seg of state.segments) {
-        const covered = op.keepRanges.some(
-          (kr) => Math.min(seg.sourceEnd, kr.end) - Math.max(seg.sourceStart, kr.start) > 0.1,
-        );
-        if (!covered) {
-          removed.push({ start: seg.sourceStart, end: seg.sourceEnd });
+    } else if ((op.type === 'KEEP_ONLY_RANGE' || op.type === 'CREATE_DURATION_CUT') && op.keepRanges) {
+      const kept=[...op.keepRanges].sort((a,b)=>a.start-b.start);
+      for(const seg of state.segments){
+        let cursor=seg.sourceStart;
+        for(const range of kept){
+          const start=Math.max(seg.sourceStart,range.start),end=Math.min(seg.sourceEnd,range.end);
+          if(end-start<=.1 || end<=cursor) continue;
+          if(start>cursor) removed.push({start:cursor,end:start});
+          cursor=Math.max(cursor,end);
         }
-      }
-    } else if (op.type === 'CREATE_DURATION_CUT' && op.keepRanges) {
-      for (const seg of state.segments) {
-        const covered = op.keepRanges.some(
-          (kr) => Math.min(seg.sourceEnd, kr.end) - Math.max(seg.sourceStart, kr.start) > 0.1,
-        );
-        if (!covered) {
-          removed.push({ start: seg.sourceStart, end: seg.sourceEnd });
-        }
+        if(cursor<seg.sourceEnd) removed.push({start:cursor,end:seg.sourceEnd});
       }
     }
   }
@@ -810,16 +805,16 @@ export function applyEditPlan(
       case 'SET_SPEED': {
         if (!state.trackLocks.video) {
           const speed = Math.min(4, Math.max(0.25, op.speed || 1));
-          segments = segments.map((seg) => {
-            if (op.segmentId && seg.id !== op.segmentId) return seg;
-            if (
-              op.sourceStart !== undefined &&
-              op.sourceEnd !== undefined &&
-              (seg.sourceEnd <= op.sourceStart || seg.sourceStart >= op.sourceEnd)
-            ) {
-              return seg;
-            }
-            return { ...seg, speed };
+          segments = segments.flatMap(seg => {
+            if (op.segmentId && seg.id !== op.segmentId) return [seg];
+            const start = Math.max(seg.sourceStart, op.sourceStart ?? seg.sourceStart);
+            const end = Math.min(seg.sourceEnd, op.sourceEnd ?? seg.sourceEnd);
+            if (end <= start) return [seg];
+            const parts = [];
+            if (start > seg.sourceStart) parts.push({...seg,id:nextSegmentId(),sourceEnd:start});
+            parts.push({...seg,sourceStart:start,sourceEnd:end,speed});
+            if (end < seg.sourceEnd) parts.push({...seg,id:nextSegmentId(),sourceStart:end});
+            return parts;
           });
           appliedCount += 1;
         }

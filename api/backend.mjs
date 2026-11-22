@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import build from '../.media-worker/revision.json' with { type: 'json' };
 import sdk from '../.media-worker/sdk.cjs';
 const { Drive, Sandbox } = sdk;
 
@@ -7,11 +8,11 @@ let pending;
 let ready;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function healthy(origin) {
+async function health(origin) {
   try {
     const response = await fetch(origin + '/api/health', { signal: AbortSignal.timeout(3500) });
-    return response.ok && (await response.json()).ok === true;
-  } catch { return false; }
+    return response.ok ? await response.json() : null;
+  } catch { return null; }
 }
 
 async function startBackend() {
@@ -23,7 +24,22 @@ async function startBackend() {
     mounts: { '/mnt/editmind': drive }
   });
   const origin = sandbox.domain(3000);
-  if (!await healthy(origin)) {
+  const old=await health(origin);
+  if (old?.ok && old.mediaRevision!==build.revision) {
+    // Preserve in-flight work when updating an already running media server.
+    const upgrade=await sandbox.runCommand({cmd:'bash',args:['-c',String.raw`set -eu
+for pid in $(pgrep -f '^node server[.]mjs$'); do
+  dir=$(readlink /proc/$pid/cwd)
+  case "$dir" in */editmind-*) ;; *) continue ;; esac
+  cd "$dir"
+  node --input-type=module -e "import DB from 'better-sqlite3';const db=new DB('/mnt/editmind/storage/editmind.db',{readonly:true});const active=db.prepare(\"SELECT COUNT(*) n FROM analysis_jobs WHERE status IN ('queued','extracting-audio','transcribing','aligning','generating-captions')\").get().n+db.prepare(\"SELECT COUNT(*) n FROM exports WHERE status IN ('queued','rendering','validating')\").get().n;process.exit(active?42:0)"
+  kill -TERM "$pid"
+done` ]});
+    if (upgrade.exitCode===42) return origin;
+    if (upgrade.exitCode) throw new Error('Worker upgrade: '+(await upgrade.stderr()).slice(-350));
+    await sleep(700);
+  }
+  if (old?.mediaRevision!==build.revision) {
     const archive = await readFile('.media-worker/runtime.tgz');
     const release = createHash('sha256').update(archive).digest('hex').slice(0, 16);
     const cwd = (await (await sandbox.runCommand('pwd')).stdout()).trim();
@@ -40,7 +56,7 @@ async function startBackend() {
       detached: true
     });
     for (let n = 0; n < 104; n++) {
-      if (await healthy(origin)) return origin;
+      if ((await health(origin))?.mediaRevision===build.revision) return origin;
       if (n % 6 === 5) {
         const status = await sandbox.getCommand(command.cmdId);
         if (status.exitCode != null && status.exitCode !== 73) {

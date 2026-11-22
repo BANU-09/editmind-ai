@@ -236,6 +236,19 @@ export function parseWavInt16MonoToFloat32(wavPath: string): { samples: Float32A
   return { samples: f32, sampleRate };
 }
 
+// Strip long near-digital-silence tails from the recognizer input only. Whisper
+// otherwise decodes a few seconds of speech in a mostly empty 30-second window.
+function recognitionWindow(samples:Float32Array,sampleRate=16000) {
+  let first=0,end=samples.length;
+  while (first<end && Math.abs(samples[first])<0.0004) first++;
+  while (end>first && Math.abs(samples[end-1])<0.0004) end--;
+  if (first===samples.length) return {audio:samples.subarray(0,0),offset:0};
+  const margin=Math.round(.35*sampleRate);
+  const start=first>sampleRate?Math.max(0,first-margin):0;
+  const stop=samples.length-end>sampleRate?Math.min(samples.length,end+margin):samples.length;
+  return {audio:samples.subarray(start,stop),offset:start/sampleRate};
+}
+
 export function computeRms(samples: Float32Array): number {
   if (samples.length === 0) return 0;
   let sum = 0;
@@ -333,7 +346,7 @@ async function prepareConditionedWavForStt(wavPath: string): Promise<{ sttWavPat
 export function planVoiceAwareChunks(
   durationSec: number,
   silences: SilenceRange[],
-  opts: { targetSec?: number; minSec?: number; maxSec?: number; overlapSec?: number } = {},
+  opts: { targetSec?: number; minSec?: number; maxSec?: number; overlapSec?: number; preferPhraseBoundaries?: boolean } = {},
 ): PlannedChunk[] {
   const cfg = getAppConfig();
   const total = Math.max(0.5, durationSec);
@@ -368,7 +381,9 @@ export function planVoiceAwareChunks(
     for (const s of silences) {
       const mid = (s.start + s.end) / 2;
       if (mid >= winStart && mid <= winEnd) {
-        const dist = Math.abs(mid - ideal);
+        // A longer break is a stronger boundary between speakers or languages.
+        const breakWeight = opts.preferPhraseBoundaries ? 2.5 * Math.min(1.5,s.end-s.start) : 0;
+        const dist = Math.abs(mid - ideal) - breakWeight;
         if (dist < bestDist) {
           bestDist = dist;
           bestSplit = mid;
@@ -382,12 +397,19 @@ export function planVoiceAwareChunks(
   }
   splitPoints.push(Math.round(total * 1000) / 1000);
 
+  // If a strong quiet boundary separates languages, share the actual silence.
+  // Overlapping voiced material from the preceding language can derail decoding.
+  const overlapAt=(time:number)=>{
+    if(!opts.preferPhraseBoundaries) return overlapSec;
+    const pause=silences.find(s=>s.duration>=1 && s.start<time && s.end>time);
+    return pause ? Math.min(overlapSec,Math.max(.1,Math.min(time-pause.start,pause.end-time)-.065)) : overlapSec;
+  };
   const chunks: PlannedChunk[] = [];
   for (let i = 0; i < splitPoints.length - 1; i++) {
     const coreStart = splitPoints[i];
     const coreEnd = splitPoints[i + 1];
-    const overlapBefore = i > 0 ? Math.min(overlapSec, coreStart) : 0;
-    const overlapAfter = i < splitPoints.length - 2 ? Math.min(overlapSec, total - coreEnd) : 0;
+    const overlapBefore = i > 0 ? Math.min(overlapAt(coreStart), coreStart) : 0;
+    const overlapAfter = i < splitPoints.length - 2 ? Math.min(overlapAt(coreEnd), total - coreEnd) : 0;
     chunks.push({
       index: i,
       sourceStart: Math.round(Math.max(0, coreStart - overlapBefore) * 1000) / 1000,
@@ -768,12 +790,15 @@ export async function detectAudioLanguage(params: {
     const p = await getLocalWhisperPipeline();
     const { samples } = parseWavInt16MonoToFloat32(params.sampleWavPath);
     if (computeRms(samples) >= 0.0025 && p.processor && p.model && p.tokenizer) {
-      const inputs = await p.processor(samples.slice(0, Math.min(samples.length, 16000 * 25)));
+      const speech=recognitionWindow(samples).audio;
+      const inputs = await p.processor(speech.subarray(0,16000*25));
       const [startTok] = p.tokenizer.convert_tokens_to_ids(['<|startoftranscript|>']);
       const generated = await p.model.generate({
         ...inputs,
-        max_new_tokens: 3,
-        decoder_input_ids: [[startTok]],
+        max_new_tokens: 1,
+        decoder_input_ids: [startTok],
+        forced_decoder_ids: null,
+        return_timestamps: false,
       });
       const seq: number[] = [];
       const rawSeq = (generated.data || []) as Iterable<number | bigint>;
@@ -799,10 +824,10 @@ export async function detectAudioLanguage(params: {
   }
 
   return {
-    primaryLanguage: 'en',
-    primaryLabel: 'English',
-    confidence: 0.65,
-    languagesDetected: [{ language: 'en', label: 'English', confidence: 0.65 }],
+    primaryLanguage: 'und',
+    primaryLabel: 'Undetermined',
+    confidence: 0,
+    languagesDetected: [],
     isMultilingual: false,
     provider: 'default-fallback',
   };
@@ -842,8 +867,9 @@ export async function transcribeChunkWithLocalWhisper(params: {
   vocabulary?: string[];
 }): Promise<{ text: string; language: string; words: RawRecognizedWord[]; provider: string }> {
   const { wavPath, chunkId, sourceStart, sourceEnd, languageHint, vocabulary = [] } = params;
-  const conditioned = await prepareConditionedWavForStt(wavPath);
-  const { samples } = parseWavInt16MonoToFloat32(conditioned.sttWavPath);
+  const { samples, sampleRate } = parseWavInt16MonoToFloat32(wavPath);
+  const ac=computeChunkAcoustics(samples,sampleRate);
+  const conditioned={noisyAudio:ac.noiseFloorRms>0.008 && ac.snrDb<14,snrDb:ac.snrDb};
   const chunkDur = Math.max(0.2, sourceEnd - sourceStart);
 
   const rms = computeRms(samples);
@@ -858,7 +884,12 @@ export async function transcribeChunkWithLocalWhisper(params: {
 
   const transcriber = await getLocalWhisperPipeline();
   const isMultilingualModel = !getAppConfig().sttWhisperModel.endsWith('.en');
-  const langMeta = resolveLanguageMeta(languageHint || 'auto');
+  let langMeta = resolveLanguageMeta(languageHint || 'auto');
+  if (isMultilingualModel && langMeta.code==='auto') {
+    const detected=await detectAudioLanguage({sampleWavPath:wavPath,sttProvider:'whisper'});
+    if (detected.primaryLanguage==='und') throw new Error('Whisper could not identify the spoken language in this chunk. Select its language and retry.');
+    langMeta=resolveLanguageMeta(detected.primaryLanguage);
+  }
 
   const opts: Record<string, unknown> = { return_timestamps: 'word' };
   if (isMultilingualModel) {
@@ -868,7 +899,8 @@ export async function transcribeChunkWithLocalWhisper(params: {
     }
   }
 
-  const out = await transcriber(samples, opts);
+  const window=recognitionWindow(samples,sampleRate);
+  const out = await transcriber(window.audio, opts);
   const words: RawRecognizedWord[] = [];
   const rawChunks = Array.isArray(out.chunks) ? out.chunks : [];
 
@@ -892,8 +924,8 @@ export async function transcribeChunkWithLocalWhisper(params: {
       Array.isArray(ch.timestamp) && typeof ch.timestamp[1] === 'number'
         ? ch.timestamp[1]
         : relStart + 0.28;
-    const absStart = Math.max(sourceStart, Math.min(sourceEnd - 0.04, sourceStart + Math.max(0, relStart)));
-    const absEnd = Math.min(sourceEnd, Math.max(absStart + 0.06, sourceStart + Math.max(relStart + 0.08, rawRelEnd)));
+    const absStart = Math.max(sourceStart, Math.min(sourceEnd - 0.04, sourceStart + window.offset + Math.max(0, relStart)));
+    const absEnd = Math.min(sourceEnd, Math.max(absStart + 0.06, sourceStart + window.offset + Math.max(relStart + 0.08, rawRelEnd)));
 
     let conf = acousticBaseConf;
     const norm = normalizeWordToken(token);
@@ -924,7 +956,7 @@ export async function transcribeChunkWithLocalWhisper(params: {
       start: Math.round(absStart * 1000) / 1000,
       end: Math.round(absEnd * 1000) / 1000,
       confidence: Math.round(conf * 100) / 100,
-      timingAccuracy: 'model-word',
+      timingAccuracy: Array.isArray(ch.timestamp) && typeof ch.timestamp[0]==='number' && typeof ch.timestamp[1]==='number' ? 'model-word':'approximate',
       chunkId,
       verificationStatus: status,
       candidates: candidates.length > 0 ? candidates.slice(0, 3) : undefined,
@@ -1801,37 +1833,16 @@ export async function extractStreamWavAndSilences(params: {
   fs.mkdirSync(mediaAudioDir, { recursive: true });
   const masterWavPath = path.join(mediaAudioDir, `stream_${params.audioStreamIndex}_16k.wav`);
 
-  await execFileAsync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i',
-      params.filePath,
-      '-map',
-      `0:a:${params.audioStreamIndex}`,
-      '-vn',
-      '-ar',
-      '16000',
-      '-ac',
-      '1',
-      '-c:a',
-      'pcm_s16le',
-      masterWavPath,
-    ],
-    { maxBuffer: 16 * 1024 * 1024 },
-  );
-
-  const silences: SilenceRange[] = [];
-  try {
-    const { stderr } = await execFileAsync('ffmpeg', [
-      '-i',
-      masterWavPath,
-      '-af',
-      'silencedetect=noise=-34dB:d=0.4',
-      '-f',
-      'null',
-      '-',
-    ]);
+  const featuresPath=masterWavPath+'.json';
+  if (fs.existsSync(masterWavPath) && fs.existsSync(featuresPath)) {
+    const features=JSON.parse(await fs.promises.readFile(featuresPath,'utf8'));
+    return {masterWavPath,...features};
+  }
+  const temp=masterWavPath+'.'+uuid()+'.wav';
+  const {stderr}=await execFileAsync('ffmpeg',['-nostdin','-hide_banner','-nostats','-y','-i',params.filePath,'-map',`0:a:${params.audioStreamIndex}`,'-vn','-af','silencedetect=noise=-34dB:d=0.4','-ar','16000','-ac','1','-c:a','pcm_s16le',temp],{maxBuffer:16*1024*1024});
+  await fs.promises.rename(temp,masterWavPath);
+  const silences:SilenceRange[]=[];
+  {
     let currentStart: number | null = null;
     for (const line of stderr.split('\n')) {
       const startMatch = line.match(/silence_start:\s*([0-9.]+)/);
@@ -1851,8 +1862,6 @@ export async function extractStreamWavAndSilences(params: {
         currentStart = null;
       }
     }
-  } catch {
-    // Non-fatal
   }
 
   const waveformPeaks: number[] = [];
@@ -1888,6 +1897,9 @@ export async function extractStreamWavAndSilences(params: {
     for (let i = 0; i < sampleCount; i++) waveformPeaks.push(0.35);
   }
 
+  const tmpFeatures=featuresPath+uuid();
+  await fs.promises.writeFile(tmpFeatures,JSON.stringify({silences,waveformPeaks}));
+  await fs.promises.rename(tmpFeatures,featuresPath);
   return { masterWavPath, silences, waveformPeaks };
 }
 
@@ -1901,47 +1913,37 @@ export async function sliceChunkAudioFiles(params: {
   fs.mkdirSync(chunkDir, { recursive: true });
 
   const prepared: Array<{ chunkId: string; chunk: PlannedChunk; wavPath: string; compressedPath: string }> = [];
-  for (const ch of params.chunks) {
-    const chunkId = `chk-${params.mediaId.slice(0, 12)}-${String(ch.index).padStart(3, '0')}-${uuid().slice(0, 6)}`;
-    const wavPath = path.join(chunkDir, `chunk_${String(ch.index).padStart(3, '0')}.wav`);
-    const compressedPath = path.join(chunkDir, `chunk_${String(ch.index).padStart(3, '0')}.mp3`);
-    const clipDur = Math.max(0.2, ch.sourceEnd - ch.sourceStart);
-
-    await execFileAsync('ffmpeg', [
-      '-y',
-      '-ss',
-      ch.sourceStart.toFixed(3),
-      '-t',
-      clipDur.toFixed(3),
-      '-i',
-      params.masterWavPath,
-      '-ac',
-      '1',
-      '-ar',
-      '16000',
-      '-c:a',
-      'pcm_s16le',
-      wavPath,
-    ]);
-
-    await execFileAsync('ffmpeg', [
-      '-y',
-      '-i',
-      wavPath,
-      '-ac',
-      '1',
-      '-ar',
-      '16000',
-      '-b:a',
-      '32k',
-      compressedPath,
-    ]).catch(() => {
-      // Fallback to wav if libmp3lame unavailable
-    });
-
-    prepared.push({ chunkId, chunk: ch, wavPath, compressedPath });
-  }
-
+  const source=await fs.promises.open(params.masterWavPath,'r');
+  try {
+    const header=Buffer.alloc(4096);
+    const {bytesRead}=await source.read(header,0,header.length,0);
+    let offset=12;
+    while (offset+8<=bytesRead && header.toString('ascii',offset,offset+4)!=='data') {
+      const size=header.readUInt32LE(offset+4);
+      offset+=8+size+(size%2);
+    }
+    if (offset+8>bytesRead) throw new Error('PCM data header missing.');
+    const available=header.readUInt32LE(offset+4);
+    for (const chunk of params.chunks) {
+      const start=Math.min(available,Math.round(chunk.sourceStart*16000)*2);
+      const end=Math.min(available,Math.round(chunk.sourceEnd*16000)*2);
+      if (end<=start) continue;
+      const wav=Buffer.alloc(44+end-start);
+      wav.write('RIFF'); wav.writeUInt32LE(wav.length-8,4); wav.write('WAVEfmt ',8);
+      wav.writeUInt32LE(16,16); wav.writeUInt16LE(1,20); wav.writeUInt16LE(1,22);
+      wav.writeUInt32LE(16000,24); wav.writeUInt32LE(32000,28); wav.writeUInt16LE(2,32);
+      wav.writeUInt16LE(16,34); wav.write('data',36); wav.writeUInt32LE(end-start,40);
+      let done=0;
+      while (done<end-start) {
+        const read=await source.read(wav,44+done,end-start-done,offset+8+start+done);
+        if (!read.bytesRead) throw new Error('Truncated PCM track.');
+        done+=read.bytesRead;
+      }
+      const wavPath=path.join(chunkDir,`chunk_${chunk.index}.wav`);
+      await fs.promises.writeFile(wavPath,wav);
+      prepared.push({chunkId:'chk-'+uuid(),chunk,wavPath,compressedPath:wavPath});
+    }
+  } finally { await source.close(); }
   return prepared;
 }
 
@@ -1950,6 +1952,7 @@ export function hydrateAnalysisJobRow(row: Record<string, unknown>): AnalysisJob
     id: row.id as string,
     mediaId: row.media_id as string,
     projectId: (row.project_id as string | null) ?? null,
+    metrics: row.metrics_json ? JSON.parse(String(row.metrics_json)) : undefined,
     selectedAudioStream: Number(row.selected_audio_stream ?? 0),
     status: row.status as TranscriptionStatus,
     overallProgress: Number(row.overall_progress ?? 0),
@@ -2084,7 +2087,7 @@ export async function processChunksForJob(
     provider: providerMode,
   };
 
-  if (allRows.length > 0) {
+  if (allRows.length > 0 && (providerMode!=='whisper' || (options.languageOverride && options.languageOverride!=='auto'))) {
     const sampleRow = allRows.find((r) => fs.existsSync((r.wav_path as string) || '')) || allRows[0];
     if (sampleRow && fs.existsSync((sampleRow.wav_path as string) || '')) {
       detectedLanguage = await detectAudioLanguage({
@@ -2157,10 +2160,7 @@ export async function processChunksForJob(
                 chunkId,
                 sourceStart,
                 sourceEnd,
-                languageHint:
-                  options.languageOverride && options.languageOverride !== 'auto'
-                    ? options.languageOverride
-                    : detectedLanguage.primaryLanguage,
+                languageHint: options.languageOverride || 'auto',
                 isMultilingual: detectedLanguage.isMultilingual,
                 vocabulary,
                 previousContext: prevCtx,
@@ -2181,10 +2181,7 @@ export async function processChunksForJob(
                 chunkId,
                 sourceStart,
                 sourceEnd,
-                languageHint:
-                  options.languageOverride && options.languageOverride !== 'auto'
-                    ? options.languageOverride
-                    : detectedLanguage.primaryLanguage,
+                languageHint: options.languageOverride || 'auto',
                 vocabulary,
               });
             }
@@ -2194,10 +2191,7 @@ export async function processChunksForJob(
               chunkId,
               sourceStart,
               sourceEnd,
-              languageHint:
-                options.languageOverride && options.languageOverride !== 'auto'
-                  ? options.languageOverride
-                  : detectedLanguage.primaryLanguage,
+              languageHint: options.languageOverride || 'auto',
               vocabulary,
             });
           }
@@ -2286,6 +2280,16 @@ export async function processChunksForJob(
     }
   }
 
+  if (rawChunkOutputs.length && providerMode!=='mock') {
+    const spoken=rawChunkOutputs.filter(c=>c.words.length && c.language && c.language!=='auto');
+    if (spoken.length) {
+      const totals=new Map<string,number>();
+      for (const c of spoken) totals.set(c.language,(totals.get(c.language)||0)+c.words.length);
+      const primary=[...totals].sort((a,b)=>b[1]-a[1])[0][0];
+      detectedLanguage={...detectedLanguage,primaryLanguage:primary,primaryLabel:resolveLanguageMeta(primary).label,
+        isMultilingual:totals.size>1,languagesDetected:spoken.map(c=>({language:c.language,label:resolveLanguageMeta(c.language).label,confidence:detectedLanguage.confidence,start:c.sourceStart,end:c.sourceEnd}))};
+    }
+  }
   // Pass-2 Audio-First Context Verification
   updateAnalysisJobRow(jobId, {
     status: 'aligning',

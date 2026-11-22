@@ -130,7 +130,7 @@ function buildAtempoChain(speed: number): string {
   return parts.join(',');
 }
 
-export async function runExportJob(params: {
+interface RenderRequest {
   jobId: string;
   projectId: string;
   mediaId: string;
@@ -140,7 +140,32 @@ export async function runExportJob(params: {
   state: ProjectState;
   resolution: ExportJob['resolution'];
   quality: ExportJob['quality'];
-}): Promise<void> {
+}
+// FFmpeg renders share a bounded CPU and memory budget in the media worker.
+let lastRender:Promise<void>=Promise.resolve();
+const scheduledRenders=new Map<string,Promise<void>>();
+export function runExportJob(params:RenderRequest):Promise<void> {
+  const existing=scheduledRenders.get(params.jobId);
+  if(existing) return existing;
+  db.prepare('UPDATE exports SET render_request_json=? WHERE id=?').run(JSON.stringify(params),params.jobId);
+  const task=lastRender.then(()=>render(params)).finally(()=>scheduledRenders.delete(params.jobId));
+  scheduledRenders.set(params.jobId,task);
+  lastRender=task.catch(()=>{});
+  return task;
+}
+export function resumeIncompleteRenders() {
+  const rows=db.prepare("SELECT id,render_request_json FROM exports WHERE status IN ('queued','rendering','validating') AND render_request_json IS NOT NULL ORDER BY created_at").all() as {id:string;render_request_json:string}[];
+  for (const row of rows) {
+    try {
+      const params=JSON.parse(row.render_request_json) as RenderRequest;
+      if(params.jobId!==row.id) throw new Error('Invalid saved render request');
+      void runExportJob(params);
+    } catch {
+      db.prepare("UPDATE exports SET status='failed',error='Could not restore the saved render request.' WHERE id=?").run(row.id);
+    }
+  }
+}
+async function render(params:RenderRequest):Promise<void> {
   const {
     jobId,
     sourceFilePath,
@@ -167,6 +192,7 @@ export async function runExportJob(params: {
       patch.error ?? current.error,
       jobId,
     );
+    if (patch.status==='completed' || patch.status==='failed') db.prepare('UPDATE exports SET render_request_json=NULL WHERE id=?').run(jobId);
   };
 
   try {
@@ -176,7 +202,16 @@ export async function runExportJob(params: {
 
     updateJob({ status: 'rendering', progress: 8 });
 
-    const { segments, duration: expectedDuration } = recalculateTimeline(state.segments);
+    const { segments: timeline, duration: expectedDuration } = recalculateTimeline(state.segments);
+    // Timeline labels and captions do not introduce media cuts.
+    const segments: typeof timeline = [];
+    for (const seg of timeline) {
+      const prev=segments.at(-1);
+      if (prev && Math.abs(prev.sourceEnd-seg.sourceStart)<0.001 && prev.speed===seg.speed && prev.volume===seg.volume && prev.muted===seg.muted) {
+        prev.sourceEnd=seg.sourceEnd;
+        prev.timelineEnd=seg.timelineEnd;
+      } else segments.push({...seg});
+    }
     if (segments.length === 0 || expectedDuration <= 0.05) {
       throw new Error('Timeline has no active segments to export.');
     }
@@ -198,6 +233,17 @@ export async function runExportJob(params: {
     const concatInputs: string[] = [];
     const inputArgs: string[] = [];
 
+    const sourceAudio=sourceMeta.audioStreams[safeAudioIdx];
+    const fullSpan=segments.length===1 && segments[0].sourceStart===0 && Math.abs(segments[0].sourceEnd-sourceMeta.durationSec)<0.025 && segments[0].speed===1;
+    const untouchedAudio=fullSpan && sourceAudio && !segments[0].muted && segments[0].volume===1 && state.audio.masterVolume===1 && !state.audio.muted && state.trackVisibility.audio && !state.audio.noiseReduction && !state.audio.fadeInSec && !state.audio.fadeOutSec && !state.bleeps.length && !state.muteRanges?.length && !(state.audio.musicEnabled && state.trackVisibility.music);
+    const includeAudio=!!sourceAudio || (state.audio.musicEnabled && state.trackVisibility.music) || state.bleeps.length>0;
+    if (sourceHasAudio && !sourceMeta.hasAudio) throw new Error('The selected source audio stream could not be read.');
+    const copyVideo=fullSpan && sourceMeta.codec==='h264' && sourceMeta.width===targetDims.w && sourceMeta.height===targetDims.h &&
+      !(state.captionsEnabled && state.trackVisibility.captions && state.captions.length) &&
+      !(state.trackVisibility.overlays && state.overlays.length);
+    const copyAudio=untouchedAudio && ['aac','mp3','alac','ac3','eac3'].includes(sourceAudio.codec);
+    const rate=sourceAudio?.sampleRate || 48000;
+    const layout=sourceAudio?.channelLayout && /^[a-zA-Z0-9.()_]+$/.test(sourceAudio.channelLayout) ? sourceAudio.channelLayout : 'stereo';
     segments.forEach((seg, i) => {
       const sStart = Math.max(0, seg.sourceStart);
       const sEnd = Math.max(sStart + 0.05, seg.sourceEnd);
@@ -205,38 +251,35 @@ export async function runExportJob(params: {
       const speed = Math.min(4, Math.max(0.25, seg.speed || 1));
       const tlDur = Math.max(0.05, sourceClipDur / speed);
 
-      inputArgs.push(
-        '-ss',
-        sStart.toFixed(3),
-        '-t',
-        sourceClipDur.toFixed(3),
-        '-i',
-        sourceFilePath,
+      if (!fullSpan) inputArgs.push('-ss',sStart.toFixed(3),'-t',sourceClipDur.toFixed(3));
+      inputArgs.push('-threads','2','-i',sourceFilePath);
+
+      if (!copyVideo) filterLines.push(
+        `[${i}:v]setpts=(PTS-STARTPTS)/${speed.toFixed(4)},fps=${sourceMeta.fps},scale=${targetDims.w}:${targetDims.h}:force_original_aspect_ratio=decrease,pad=${targetDims.w}:${targetDims.h}:(ow-iw)/2:(oh-ih)/2:color=#02040A,format=yuv420p[v${i}]`,
       );
 
-      filterLines.push(
-        `[${i}:v]setpts=(PTS-STARTPTS)/${speed.toFixed(4)},fps=24,scale=${targetDims.w}:${targetDims.h}:force_original_aspect_ratio=decrease,pad=${targetDims.w}:${targetDims.h}:(ow-iw)/2:(oh-ih)/2:color=#02040A,format=yuv420p[v${i}]`,
-      );
-
-      if (sourceHasAudio && sourceMeta.hasAudio && !state.audio.muted && !seg.muted && state.trackVisibility.audio) {
+      if (!includeAudio || untouchedAudio) {
+        // The original stream is mapped directly after the video filters.
+      } else if (sourceHasAudio && sourceMeta.hasAudio && !state.audio.muted && !seg.muted && state.trackVisibility.audio) {
         const vol = Math.max(0, Math.min(2, seg.volume * state.audio.masterVolume));
         const denoise = state.audio.noiseReduction ? 'highpass=f=85,lowpass=f=11000,' : '';
         filterLines.push(
-          `[${i}:a:${safeAudioIdx}]asetpts=PTS-STARTPTS,${buildAtempoChain(speed)},${denoise}volume=${vol.toFixed(2)},aformat=sample_rates=24000:channel_layouts=mono[a${i}]`,
+          `[${i}:a:${safeAudioIdx}]atrim=duration=${sourceClipDur.toFixed(3)},asetpts=PTS-STARTPTS,${speed===1 ? '' : buildAtempoChain(speed)+','}${denoise}volume=${vol.toFixed(2)}[a${i}]`,
         );
       } else {
         filterLines.push(
-          `anullsrc=r=24000:cl=mono,atrim=duration=${tlDur.toFixed(3)}[a${i}]`,
+          `anullsrc=r=${rate}:cl=${layout},atrim=duration=${tlDur.toFixed(3)}[a${i}]`,
         );
       }
 
-      concatInputs.push(`[v${i}][a${i}]`);
+      concatInputs.push(`[v${i}]`);
     });
 
-    filterLines.push(`${concatInputs.join('')}concat=n=${segments.length}:v=1:a=1[vcat][acat]`);
+    if (!copyVideo) filterLines.push(`${concatInputs.join('')}concat=n=${segments.length}:v=1:a=0[vcat]`);
 
-    let currentV = '[vcat]';
-    let currentA = '[acat]';
+    let currentV = copyVideo?'0:v:0':'[vcat]';
+    if (includeAudio && !untouchedAudio) filterLines.push(segments.map((_,i)=>`[a${i}]`).join('')+`concat=n=${segments.length}:v=0:a=1[acat]`);
+    let currentA = untouchedAudio ? `0:a:${safeAudioIdx}` : '[acat]';
 
     // Apply timeline muteRanges and bleeps accurately onto concatenated audio
     const muteWindows: Array<{ start: number; end: number }> = [];
@@ -256,7 +299,7 @@ export async function runExportJob(params: {
       }
     }
 
-    if (muteWindows.length > 0) {
+    if (includeAudio && muteWindows.length > 0) {
       const enableExpr = muteWindows
         .map((w) => `between(t,${w.start.toFixed(3)},${w.end.toFixed(3)})`)
         .join('+');
@@ -326,7 +369,7 @@ export async function runExportJob(params: {
         const startOffset = Math.max(0, state.audio.musicStartOffsetSec || 0);
         inputArgs.push('-stream_loop', '-1', '-ss', startOffset.toFixed(2), '-i', customPath);
         filterLines.push(
-          `[${musicInputIdx}:a]atrim=duration=${expectedDuration.toFixed(3)},asetpts=PTS-STARTPTS,aformat=sample_rates=24000:channel_layouts=mono,afade=t=in:st=0:d=${fadeIn.toFixed(2)},afade=t=out:st=${fadeOutStart.toFixed(2)}:d=${fadeOutDur.toFixed(2)},volume=${mVol.toFixed(2)}[mbed]`,
+          `[${musicInputIdx}:a]atrim=duration=${expectedDuration.toFixed(3)},asetpts=PTS-STARTPTS,aformat=sample_rates=${rate}:channel_layouts=${layout},afade=t=in:st=0:d=${fadeIn.toFixed(2)},afade=t=out:st=${fadeOutStart.toFixed(2)}:d=${fadeOutDur.toFixed(2)},volume=${mVol.toFixed(2)}[mbed]`,
         );
       } else {
         const chordExpr =
@@ -344,7 +387,7 @@ export async function runExportJob(params: {
     }
 
     // Apply master audio fade in/out if configured
-    if (state.audio.fadeInSec > 0 || state.audio.fadeOutSec > 0) {
+    if (includeAudio && (state.audio.fadeInSec > 0 || state.audio.fadeOutSec > 0)) {
       const parts: string[] = [];
       if (state.audio.fadeInSec > 0) parts.push(`afade=t=in:st=0:d=${state.audio.fadeInSec.toFixed(2)}`);
       if (state.audio.fadeOutSec > 0) {
@@ -361,22 +404,11 @@ export async function runExportJob(params: {
       const args = [
         '-y',
         ...inputArgs,
-        '-filter_complex',
-        filterComplex,
-        '-map',
-        currentV,
-        '-map',
-        currentA,
-        '-c:v',
-        'libx264',
-        '-preset',
-        preset,
-        '-crf',
-        crf,
-        '-c:a',
-        'aac',
-        '-b:a',
-        '128k',
+        ...(filterComplex ? ['-filter_complex_threads','2','-filter_complex',filterComplex] : []),
+        '-map', currentV,
+        ...(includeAudio?['-map',currentA]:[]),
+        ...(copyVideo?['-c:v','copy']:['-c:v','libx264','-preset',preset,'-crf',crf]),
+        ...(includeAudio?(copyAudio ? ['-c:a','copy'] : ['-c:a','aac','-b:a',sourceAudio && sourceAudio.channels>2?'384k':'192k']):['-an']),
         '-movflags',
         '+faststart',
         '-progress',
@@ -398,9 +430,10 @@ export async function runExportJob(params: {
       });
 
       proc.stderr.on('data', (chunk: Buffer) => {
-        stderrLog += chunk.toString();
+        stderrLog = (stderrLog+chunk.toString()).slice(-4096);
       });
 
+      proc.on('error',reject);
       proc.on('close', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`FFmpeg render exited with code ${code}: ${stderrLog.slice(-400)}`));

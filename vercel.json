@@ -4,6 +4,7 @@
   "installCommand": "npm install --ignore-scripts --no-audit --no-fund",
   "buildCommand": "VITE_MEDIA_WORKER=1 npm run build && node scripts/package-media-worker.mjs",
   "functions": {
+    "api/assistant.mjs": { "includeFiles":"scripts/start-edit-model.sh", "maxDuration": 300 },
     "api/backend.mjs": { "includeFiles": ".media-worker/runtime.tgz", "maxDuration": 300 }
   },
   "outputDirectory": "dist",

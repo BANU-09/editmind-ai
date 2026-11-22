@@ -452,3 +452,29 @@ test('REMOVE_WORD_FROM_CAPTIONS, MUTE_RANGE, word-mode projection, and caption/o
   assert.equal(state.captions.some((c) => c.id === 'cap-1'), false);
 });
 
+
+test('speech captions preserve leading, interior and trailing source audio', () => {
+  const analysis=createSampleAnalysis();
+  analysis.transcript=[{...analysis.transcript[0],start:2,end:5,words:[]},{...analysis.transcript[1],start:12,end:17,words:[]}];
+  const state=createInitialProjectState(analysis);
+  assert.equal(state.duration,analysis.durationSec);
+  for(const t of [0,1,5.5,11,12,18,39.9]) assert.equal(mapTimelineTimeToSource(state.segments,t)?.sourceTime,t);
+  assert.deepEqual(projectCaptionsToTimeline(state).map(c=>[c.timelineStart,c.timelineEnd]),[[2,5],[12,17]]);
+  const result=applyEditPlan(state,analysis,{id:'speed',aiMode:'local-ffmpeg',prompt:'',intentSummary:'',operations:[{type:'SET_SPEED',label:'Speed up a passage',sourceStart:3,sourceEnd:4,speed:2}]});
+  assert.equal(result.nextState.duration,39.5);
+  assert.equal(mapTimelineTimeToSource(result.nextState.segments,2.5)?.sourceTime,2.5);
+  assert.equal(mapTimelineTimeToSource(result.nextState.segments,3.25)?.sourceTime,3.5);
+  assert.equal(mapTimelineTimeToSource(result.nextState.segments,4.5)?.sourceTime,5);
+});
+
+test('keeping part of one source segment still reports removed protected words', () => {
+  const analysis = createSampleAnalysis();
+  const state = createInitialProjectState(analysis);
+  const impact = computeEditImpact(state, analysis, {
+    id: 'partial-keep', prompt: 'Keep only the opening', aiMode: 'local-llm',
+    intentSummary: 'Keep the opening', operations: [{
+      type: 'KEEP_ONLY_RANGE', label: 'Opening', keepRanges: [{start: 0, end: 8, label: 'Opening'}],
+    }],
+  });
+  assert.equal(impact.hasProtectedCollision, true);
+});

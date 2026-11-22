@@ -10,7 +10,7 @@ export const UPLOADS_DIR = path.join(STORAGE_DIR, 'uploads');
 export const THUMBS_DIR = path.join(STORAGE_DIR, 'thumbs');
 export const EXPORTS_DIR = path.join(STORAGE_DIR, 'exports');
 export const MUSIC_DIR = path.join(STORAGE_DIR, 'music');
-export const AUDIO_DIR = path.join(STORAGE_DIR, 'audio');
+export const AUDIO_DIR = process.env.ANALYSIS_AUDIO_DIR || path.join(STORAGE_DIR, 'audio');
 export const TEMP_DIR = cfg.tempMediaDir;
 
 for (const dir of [STORAGE_DIR, DEMOS_DIR, UPLOADS_DIR, THUMBS_DIR, EXPORTS_DIR, MUSIC_DIR, AUDIO_DIR, TEMP_DIR]) {
@@ -198,6 +198,11 @@ db.exec(`
 
 // Safe incremental column migrations for pre-existing editmind.db files
 const migrations: string[] = [
+  "ALTER TABLE exports ADD COLUMN render_request_json TEXT",
+  "ALTER TABLE multipart_uploads ADD COLUMN project_id TEXT",
+  "ALTER TABLE analysis_jobs ADD COLUMN metrics_json TEXT",
+  "ALTER TABLE media_assets ADD COLUMN upload_fingerprint TEXT",
+  "CREATE INDEX IF NOT EXISTS media_upload_fingerprint ON media_assets(upload_fingerprint)",
   "ALTER TABLE media_assets ADD COLUMN source_url TEXT",
   "ALTER TABLE media_assets ADD COLUMN vocabulary_json TEXT NOT NULL DEFAULT '[]'",
   "ALTER TABLE media_assets ADD COLUMN language_override TEXT",

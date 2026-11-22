@@ -1,3 +1,6 @@
+import {createHash} from 'node:crypto';
+import {Transform, Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -34,7 +37,7 @@ import {
   getDemoCatalogMeta,
   getDemoThumbnailFallbackPath,
 } from './server/demoGenerator';
-import { runExportJob } from './server/exporter';
+import { runExportJob, resumeIncompleteRenders } from './server/exporter';
 import { hasGeminiKey } from './server/geminiClient';
 import {
   executeAnalysisJob,
@@ -178,6 +181,8 @@ function streamMediaWithRanges(req: Request, res: Response, filePath: string, mi
       'Content-Length': chunkSize,
       'Content-Type': mimeType,
     });
+    res.on('close',()=>stream.destroy());
+    stream.on('error',()=>res.destroy());
     stream.pipe(res);
   } else {
     res.writeHead(200, {
@@ -185,7 +190,10 @@ function streamMediaWithRanges(req: Request, res: Response, filePath: string, mi
       'Content-Type': mimeType,
       'Accept-Ranges': 'bytes',
     });
-    fs.createReadStream(filePath).pipe(res);
+    const stream=fs.createReadStream(filePath);
+    res.on('close',()=>stream.destroy());
+    stream.on('error',()=>res.destroy());
+    stream.pipe(res);
   }
 }
 
@@ -262,6 +270,19 @@ function hydrateProjectRow(row: Record<string, unknown>): ProjectRecord & { medi
 
   const state = JSON.parse(row.state_json as string) as ProjectState;
   const history = JSON.parse(row.history_json as string) as HistoryEntry[];
+  // An older untouched upload may have been initialized from speech-only bounds.
+  // Only repair that exact layout; saved user cuts have independent bounds or IDs.
+  const virgin=Number(row.history_index)===0 && history.length<=1 && mediaRow?.source_type!=='demo' &&
+    state.segments.length===analysis.transcript.length && state.segments.every((seg,i)=>{
+      const t=analysis.transcript[i];
+      return seg.id===`seg-init-${i+1}` && seg.sourceSegmentId===t.id && seg.sourceStart===t.start && seg.sourceEnd===t.end && seg.speed===1;
+    });
+  if (virgin && state.duration+0.015<analysis.durationSec) {
+    const repaired=createInitialProjectState(analysis);
+    state.duration=repaired.duration;
+    state.segments=state.segments.map((s,i)=>({...s,sourceStart:repaired.segments[i].sourceStart,sourceEnd:repaired.segments[i].sourceEnd,timelineStart:repaired.segments[i].timelineStart,timelineEnd:repaired.segments[i].timelineEnd}));
+    if(history[0]) history[0]={...history[0],stateSnapshot:state,durationAfter:state.duration};
+  }
   const versions = JSON.parse(row.versions_json as string);
   let vocabulary: string[] = analysis.vocabulary || [];
   if (typeof row.vocabulary_json === 'string' && row.vocabulary_json.trim()) {
@@ -406,6 +427,7 @@ async function startServer() {
       console.log('[EDITMIND AI] Demo library ready.');
       if (!cfg.workerMode) {
         resumeIncompleteAnalysisJobs();
+        resumeIncompleteRenders();
       }
     })
     .catch((err) => console.error('[EDITMIND AI] Demo library error:', err));
@@ -414,6 +436,8 @@ async function startServer() {
   app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
+      mediaRevision:process.env.EDITMIND_MEDIA_RELEASE||'development',
+      plannerProvider:process.env.EDITMIND_PLANNER_URL?'Qwen3-4B-Instruct-2507':(hasGeminiKey()?'Gemini':null),
       geminiConfigured: hasGeminiKey(),
       ffmpegReady: true,
       maxUploadBytes: cfg.maxUploadBytes,
@@ -613,6 +637,64 @@ async function startServer() {
   });
 
   // Helper: create media_assets + project + dispatch local or remote Cloud Run worker analysis job
+  function newUploadProject(mediaId:string, analysis:MediaAnalysis, thumbnailUrl:string, title:string, vocabulary:string[],
+    ctx:{userId:string|null;guestToken:string|null}, now:string) {
+    const projectId = `prj-${uuid()}`;
+    const initialState = createInitialProjectState(analysis);
+    const versions = generateThreeVersions(analysis);
+    const initialHistory: HistoryEntry[] = [
+      {
+        id: uuid(),
+        timestamp: now,
+        label: 'Project Created',
+        durationAfter: initialState.duration,
+        stateSnapshot: initialState,
+      },
+    ];
+
+    db.prepare(
+      `INSERT INTO projects
+       (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+    ).run(
+      projectId,
+      ctx.userId,
+      ctx.guestToken,
+      title,
+      mediaId,
+      thumbnailUrl || '/api/demos/demo-keynote/thumb',
+      JSON.stringify(initialState),
+      JSON.stringify(initialHistory),
+      JSON.stringify(versions),
+      JSON.stringify(vocabulary),
+      now,
+      now,
+    );
+
+    return projectId;
+  }
+  function matchingUpload(fingerprint:string, ctx:{userId:string|null;guestToken:string|null}, stream:number, language:string|undefined,vocabulary:string[], title:string) {
+    if (!ctx.userId && !ctx.guestToken) return null;
+    const rows=db.prepare('SELECT * FROM media_assets WHERE upload_fingerprint=? AND user_id IS ? AND guest_token IS ?').all(fingerprint,ctx.userId,ctx.guestToken) as Record<string,unknown>[];
+    for (const m of rows) {
+      const a=JSON.parse(String(m.analysis_json)) as MediaAnalysis;
+      if (!fs.existsSync(String(m.file_path)) || a.selectedAudioStream!==stream || (a.selectedLanguageOverride||'auto')!==(language||'auto') || JSON.stringify(a.vocabulary||[])!==JSON.stringify(vocabulary) || ['failed','partial','cancelled'].includes(a.transcriptionStatus||'')) continue;
+      const mediaId=String(m.id);
+      const job=getLatestAnalysisJobForMedia(mediaId);
+      if (!job || ['failed','cancelled','partial'].includes(job.status)) continue;
+      const projectId=newUploadProject(mediaId,a,String(m.thumbnail_url||''),title,vocabulary,ctx,new Date().toISOString());
+      const row=db.prepare('SELECT * FROM projects WHERE id=?').get(projectId) as Record<string,unknown>;
+      return {projectId,mediaId,project:hydrateProjectRow(row),job};
+    }
+    return null;
+  }
+  app.post('/api/media/reuse',(req,res)=>{
+    const b=req.body;
+    if (typeof b.fingerprint!=='string'||!/^[0-9a-f]{64}$/.test(b.fingerprint)) return void res.status(400).json({error:'Invalid media digest.'});
+    res.json(matchingUpload(b.fingerprint,getAuthContext(req),Number(b.audioStreamIndex)||0,b.languageOverride,parseVocabularyInput(b.vocabulary),String(b.title||'Uploaded Video')) || {project:null});
+  });
+
+  const ingestLocks=new Map<string,Promise<void>>();
   async function createIngestedMediaAndProject(params: {
     filePath: string;
     originalFilename: string;
@@ -640,6 +722,29 @@ async function startServer() {
       waitForSync,
     } = params;
 
+    const hash=createHash('sha256');
+    const source=await fs.promises.open(filePath,'r');
+    try {
+      const buffer=Buffer.alloc(4*1024*1024);
+      let offset=0;
+      for (;;) {
+        const {bytesRead}=await source.read(buffer,offset,buffer.length-offset,null);
+        offset+=bytesRead;
+        if (offset===buffer.length || (!bytesRead && offset)) {
+          hash.update(createHash('sha256').update(buffer.subarray(0,offset)).digest());
+          offset=0;
+        }
+        if (!bytesRead) break;
+      }
+    } finally {await source.close();}
+    const fingerprint=hash.digest('hex');
+    const lockKey=JSON.stringify([ctx.userId,ctx.guestToken,fingerprint]);
+    while (ingestLocks.has(lockKey)) await ingestLocks.get(lockKey);
+    let unlock!:()=>void;
+    ingestLocks.set(lockKey,new Promise<void>(resolve=>{unlock=resolve;}));
+    try {
+    const cached=matchingUpload(fingerprint,ctx,audioStreamIndex,languageOverride,vocabulary,title);
+    if (cached) {await fs.promises.unlink(filePath);return cached;}
     const mediaId = `med-${uuid()}`;
     const { analysis, thumbnailUrl } = await prepareFastMediaRecord({
       mediaId,
@@ -691,37 +796,8 @@ async function startServer() {
       now,
     );
 
-    const projectId = `prj-${uuid()}`;
-    const initialState = createInitialProjectState(analysis);
-    const versions = generateThreeVersions(analysis);
-    const initialHistory: HistoryEntry[] = [
-      {
-        id: uuid(),
-        timestamp: now,
-        label: 'Project Created',
-        durationAfter: initialState.duration,
-        stateSnapshot: initialState,
-      },
-    ];
-
-    db.prepare(
-      `INSERT INTO projects
-       (id, user_id, guest_token, title, media_id, thumbnail_url, state_json, history_json, history_index, versions_json, vocabulary_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-    ).run(
-      projectId,
-      ctx.userId,
-      ctx.guestToken,
-      title,
-      mediaId,
-      thumbnailUrl || '/api/demos/demo-keynote/thumb',
-      JSON.stringify(initialState),
-      JSON.stringify(initialHistory),
-      JSON.stringify(versions),
-      JSON.stringify(vocabulary),
-      now,
-      now,
-    );
+    const projectId = newUploadProject(mediaId,analysis,thumbnailUrl,title,vocabulary,ctx,now);
+    db.prepare('UPDATE media_assets SET upload_fingerprint=? WHERE id=?').run(fingerprint,mediaId);
 
     // Dispatch to remote Cloud Run worker if configured and source exists in Vercel Blob
     if (!waitForSync && isRemoteWorkerConfigured() && resolvedBlobUrl) {
@@ -791,6 +867,7 @@ async function startServer() {
       project: hydrateProjectRow(projectRow),
       job: getAnalysisJob(job.id) || job,
     };
+    } finally {ingestLocks.delete(lockKey);unlock();}
   }
 
   // Upload or record real user media (NEVER substitutes demo media!)
@@ -1002,8 +1079,7 @@ async function startServer() {
 
   app.put(
     '/api/uploads/multipart/:uploadId/part/:partIndex',
-    express.raw({ type: '*/*', limit: '32mb' }),
-    (req, res) => {
+    async (req, res) => {
       try {
         const row = db
           .prepare('SELECT * FROM multipart_uploads WHERE id = ?')
@@ -1023,24 +1099,23 @@ async function startServer() {
           res.status(400).json({ error: `Invalid partIndex ${req.params.partIndex}.` });
           return;
         }
-        const bodyBuf = Buffer.isBuffer(req.body)
-          ? req.body
-          : typeof req.body === 'string'
-            ? Buffer.from(req.body)
-            : Buffer.alloc(0);
-        if (bodyBuf.length === 0) {
-          res.status(400).json({ error: 'Uploaded chunk part is empty.' });
-          return;
-        }
-
-        const partPath = resolveConfinedPath(row.staging_dir as string, `part-${String(partIdx).padStart(6, '0')}`);
-        if (!partPath) {
-          res.status(400).json({ error: 'Invalid part path.' });
-          return;
-        }
-        fs.writeFileSync(partPath, bodyBuf);
-
-        const received = new Set<number>(JSON.parse((row.received_parts_json as string) || '[]') as number[]);
+        if (row.status!=='uploading') return void res.status(409).json({error:'Upload is already finishing.'});
+        const expected=Math.min(Number(row.chunk_size_bytes),Number(row.size_bytes)-partIdx*Number(row.chunk_size_bytes));
+        const partPath=path.join(String(row.staging_dir),'part-'+String(partIdx).padStart(6,'0'));
+        const tmp=partPath+'.'+uuid();
+        let size=0;
+        try {
+          const limit=new Transform({transform(chunk,_encoding,done) {
+            size+=chunk.length;
+            if (size>expected) return done(new Error('Chunk exceeds declared size.'));
+            done(null,chunk);
+          }});
+          await pipeline(req,limit,fs.createWriteStream(tmp,{flags:'wx'}));
+          if (size!==expected) throw new Error('Incomplete upload part.');
+          await fs.promises.rename(tmp,partPath);
+        } finally {await fs.promises.rm(tmp,{force:true});}
+        const fresh=db.prepare('SELECT received_parts_json FROM multipart_uploads WHERE id=?').get(row.id) as {received_parts_json:string};
+        const received = new Set<number>(JSON.parse(fresh.received_parts_json || '[]') as number[]);
         received.add(partIdx);
         const receivedArr = Array.from(received).sort((a, b) => a - b);
 
@@ -1074,49 +1149,22 @@ async function startServer() {
         return;
       }
 
+      if (row.status==='completed' && row.project_id) {
+        const completed=db.prepare('SELECT * FROM projects WHERE id=?').get(row.project_id) as Record<string,unknown> | undefined;
+        if (completed) return void res.json({project:hydrateProjectRow(completed),job:getLatestAnalysisJobForMedia(String(completed.media_id))});
+      }
       const totalParts = Number(row.total_parts);
       const stagingDir = row.staging_dir as string;
       const ext = path.extname(row.filename as string) || '.mp4';
       const assembledPath = path.join(UPLOADS_DIR, `${uuid()}${ext}`);
 
-      const writeStream = fs.createWriteStream(assembledPath);
-      let totalAssembledBytes = 0;
-
-      for (let i = 0; i < totalParts; i++) {
-        const partPath = resolveConfinedPath(stagingDir, `part-${String(i).padStart(6, '0')}`);
-        if (!partPath || !fs.existsSync(partPath)) {
-          writeStream.destroy();
-          fs.rmSync(assembledPath, { force: true });
-          res.status(400).json({ error: `Missing upload part ${i} of ${totalParts}.` });
-          return;
-        }
-        await new Promise<void>((resolve, reject) => {
-          const readStream = fs.createReadStream(partPath);
-          readStream.on('data', (chunk: Buffer | string) => {
-            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-            totalAssembledBytes += buf.length;
-            if (totalAssembledBytes > cfg.maxUploadBytes) {
-              readStream.destroy(new Error('Assembled upload exceeds 2 GB ceiling.'));
-              return;
-            }
-            if (!writeStream.write(buf)) {
-              readStream.pause();
-              writeStream.once('drain', () => readStream.resume());
-            }
-          });
-          readStream.on('end', () => resolve());
-          readStream.on('error', reject);
-        });
-      }
-      await new Promise<void>((resolve) => writeStream.end(() => resolve()));
-
-      // Clean temporary staged chunks
-      fs.rmSync(stagingDir, { recursive: true, force: true });
-      db.prepare("UPDATE multipart_uploads SET status = 'completed', updated_at = ? WHERE id = ?").run(
-        new Date().toISOString(),
-        row.id,
-      );
-
+      const parts=Array.from({length:totalParts},(_,i)=>path.join(stagingDir,'part-'+String(i).padStart(6,'0')));
+      if (!parts.every(f=>fs.existsSync(f))) return void res.status(400).json({error:'Some upload parts are missing.'});
+      const claim=db.prepare("UPDATE multipart_uploads SET status='assembling' WHERE id=? AND status='uploading'").run(row.id);
+      if (!claim.changes) return void res.status(409).json({error:'Upload is already finishing.'});
+      try {
+        async function* contents() { for (const part of parts) yield* fs.createReadStream(part,{highWaterMark:1024*1024}); }
+        await pipeline(Readable.from(contents()),fs.createWriteStream(assembledPath));
       const result = await createIngestedMediaAndProject({
         filePath: assembledPath,
         originalFilename: row.filename as string,
@@ -1130,10 +1178,13 @@ async function startServer() {
         waitForSync: req.query.sync === '1',
       });
 
-      res.json({
-        project: result.project,
-        job: result.job,
-      });
+        db.prepare("UPDATE multipart_uploads SET status='completed',project_id=? WHERE id=?").run(result.projectId,row.id);
+        await fs.promises.rm(stagingDir,{recursive:true,force:true});
+        res.json({project:result.project,job:result.job});
+      } catch(err) {
+        db.prepare("UPDATE multipart_uploads SET status='uploading' WHERE id=? AND status='assembling'").run(row.id);
+        throw err;
+      }
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : 'Failed to assemble multipart upload.',
@@ -1814,6 +1865,23 @@ async function startServer() {
   });
 
   // AI Edit Plan + Impact Check
+  app.get('/api/projects/:id/assistant-context', (req,res) => {
+    const proj = db.prepare('SELECT user_id, guest_token, media_id, state_json FROM projects WHERE id=?').get(req.params.id) as Record<string,unknown> | undefined;
+    if (!proj || !canAccessOwnedRecord(getAuthContext(req),proj)) return void res.status(404).json({error:'Project unavailable.'});
+    const media = db.prepare('SELECT analysis_json FROM media_assets WHERE id=?').get(proj.media_id) as {analysis_json:string};
+    res.json({analysis:JSON.parse(media.analysis_json),state:JSON.parse(String(proj.state_json))});
+  });
+
+  app.post(['/api/ai/plan','/api/projects/:id/ai/edit'], async (req,res,next) => {
+    if (!process.env.EDITMIND_PLANNER_URL) return next();
+    try {
+      const headers:Record<string,string>={'Content-Type':'application/json'};
+      for (const name of ['authorization','cookie','x-guest-id']) if (req.header(name)) headers[name]=req.header(name)!;
+      const response=await fetch(process.env.EDITMIND_PLANNER_URL,{method:'POST',headers,body:JSON.stringify({...req.body,projectId:req.params.id||req.body.projectId}),signal:AbortSignal.timeout(275000)});
+      res.status(response.status).json(await response.json());
+    } catch { res.status(503).json({error:'The editing assistant could not reach its provider. Please retry.'}); }
+  });
+
   app.post('/api/ai/plan', async (req, res) => {
     try {
       const { projectId, prompt, currentState } = req.body as {
@@ -1846,8 +1914,8 @@ async function startServer() {
       }
 
       const analysis = JSON.parse(media.analysis_json as string) as MediaAnalysis;
-      const state = currentState || (JSON.parse(proj.state_json as string) as ProjectState);
-      const plan = await planEditFromPrompt(prompt, state, analysis);
+      const state = {...JSON.parse(proj.state_json as string), ...currentState} as ProjectState;
+      const plan = await planEditFromPrompt(prompt, state, analysis, Array.isArray(req.body.history)?req.body.history:[]);
       const impact = computeEditImpact(state, analysis, plan);
       const searchHits = plan.searchQuery
         ? searchMediaIndex(analysis, state.segments, plan.searchQuery)
@@ -2313,8 +2381,8 @@ async function startServer() {
         return;
       }
       const analysis = JSON.parse(media.analysis_json as string) as MediaAnalysis;
-      const state = currentState || (JSON.parse(proj.state_json as string) as ProjectState);
-      const plan = await planEditFromPrompt(prompt, state, analysis);
+      const state = {...JSON.parse(proj.state_json as string), ...currentState} as ProjectState;
+      const plan = await planEditFromPrompt(prompt, state, analysis, Array.isArray(req.body.history)?req.body.history:[]);
       const impact = computeEditImpact(state, analysis, plan);
       const searchHits = plan.searchQuery
         ? searchMediaIndex(analysis, state.segments, plan.searchQuery)

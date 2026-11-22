@@ -1,6 +1,6 @@
 export type SourceType = 'demo' | 'upload' | 'recording' | 'url';
 
-export type AnalysisMode = 'gemini-ai' | 'local-ffmpeg';
+export type AnalysisMode = 'gemini-ai' | 'local-ffmpeg' | 'local-llm';
 
 export type VerificationStatus = 'verified' | 'review_needed' | 'unclear_audio';
 
@@ -162,6 +162,7 @@ export interface ChunkProgressStats {
 }
 
 export interface AnalysisJob {
+  metrics?: Record<string,number>;
   id: string;
   mediaId: string;
   projectId: string | null;
@@ -496,6 +497,7 @@ export interface EditPlan {
     timelineStart: number | null;
     timelineEnd: number | null;
   }>;
+  historyAction?: 'undo' | 'redo';
   aiMode: AnalysisMode;
 }
 
