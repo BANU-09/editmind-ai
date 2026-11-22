@@ -4,7 +4,7 @@
 
 The public app uses the Express media server, local Whisper and FFmpeg in a named Vercel Sandbox. The browser discovers its current address through `/api/backend` and uploads directly to the worker. SQLite, uploads and MP4 renders live on the `editmind-project-data` Drive, mounted at `/mnt/editmind`. The five demos use the same recorded narration and beat timings in the browser and on the server.
 
-The editing assistant uses a separate private CPU worker named `editmind-language` running Qwen3-4B-Instruct-2507. The project-scoped `/api/assistant` function fetches the authorized transcript and timeline and makes a loopback inference request inside that worker. Model weights and the llama.cpp binary are checksum-pinned. A self-hosted installation can use Gemini through its own server environment.
+The editing assistant uses a separate private CPU worker named `editmind-language` running Qwen2.5-1.5B-Instruct for routing and short answers, and Qwen3-4B-Instruct-2507 for detailed planning and fallback. The project-scoped `/api/assistant` function fetches the authorized transcript and timeline and makes a loopback inference request inside that worker. Model weights and the llama.cpp binary are checksum-pinned. A self-hosted installation can use Gemini through its own server environment.
 
 The production build packages the worker with `scripts/package-media-worker.mjs`. The launcher uses the project's Vercel identity to start or resume it. The first request after sleep can take longer. The current deployment allows up to 45 minutes per worker session. A dedicated container backend can also be configured through `VITE_API_BASE_URL` as described below.
 

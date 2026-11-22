@@ -1,9 +1,33 @@
-import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import sdk from '../.media-worker/sdk.cjs';
 
-let starting;
-async function connect() {
+const tiers = {
+  fast: { port: 8091, model: 'Qwen2.5-1.5B-Instruct' },
+  planner: { port: 8090, model: 'Qwen3-4B-Instruct-2507' },
+};
+const starting = new Map();
+const connections = new Map();
+let retryFastAfter = 0;
+async function connectionForRequest(tier) {
+  const cached = connections.get(tier);
+  if (cached && cached.until > Date.now()) return cached.worker;
+  if (!starting.has(tier))
+    starting.set(
+      tier,
+      connect(tier)
+        .then((worker) => {
+          connections.set(tier, {
+            worker,
+            until: Math.min(Date.now() + 120000, worker.expiresAt?.getTime() ?? Infinity),
+          });
+          return worker;
+        })
+        .finally(() => starting.delete(tier)),
+    );
+  return starting.get(tier);
+}
+async function connect(tier) {
   const worker = await sdk.Sandbox.getOrCreate({
     name: 'editmind-language',
     image: 'vercel/sandbox/node:24',
@@ -22,7 +46,7 @@ async function connect() {
       '-fsS',
       '--max-time',
       '2',
-      'http://127.0.0.1:8090/health',
+      'http://127.0.0.1:' + tiers[tier].port + '/health',
     ]);
     return probe.exitCode === 0;
   }
@@ -30,7 +54,8 @@ async function connect() {
   const script = (await readFile('scripts/start-edit-model.sh', 'utf8')).replace(/\r\n/g, '\n');
   const start = await worker.runCommand({
     cmd: 'flock',
-    args: ['-n', '-E', '73', '/tmp/editmind-model.lock', 'bash', '-c', script],
+    args: ['-n', '-E', '73', '/tmp/editmind-model-' + tier + '.lock', 'bash', '-c', script],
+    env: { EDITMIND_MODEL_TIER: tier },
     detached: true,
   });
   for (let i = 0; i < 56; i++) {
@@ -45,12 +70,21 @@ async function connect() {
   throw new Error('The private language model is starting. Please retry.');
 }
 
-export async function generate(system, input, stage) {
-  starting ??= connect().finally(() => {
-    starting = undefined;
-  });
-  const worker = await starting;
-  const path = '/tmp/editmind-' + randomUUID() + '.json';
+export async function generate(system, input, stage, onInference) {
+  const lightweight =
+    (stage === 'route' && JSON.parse(input).prompt.length <= 240) ||
+    (stage === 'brief' && input.length < 6000);
+  const tier = lightweight && Date.now() >= retryFastAfter ? 'fast' : 'planner';
+  try {
+    return await infer(system, input, stage, tier, onInference);
+  } catch (error) {
+    if (tier === 'planner') throw error;
+    retryFastAfter = Date.now() + 45_000;
+    return infer(system, input, stage, 'planner', onInference);
+  }
+}
+async function infer(system, input, stage, tier, onInference) {
+  const worker = await connectionForRequest(tier);
   const action = {
     type: 'object',
     properties: {
@@ -85,63 +119,92 @@ export async function generate(system, input, stage) {
   const schema =
     stage === 'route'
       ? {
-          type: 'object',
-          properties: {
-            tool: {
-              type: 'string',
-              enum: [
-                'social',
-                'lookup',
-                'cut_occurrence',
-                'pause_after_edit',
-                'remove_pauses',
-                'remove_fillers',
-                'question',
-                'condense',
-                'cut_passage',
-                'caption_color',
-                'edit',
-                'undo',
-                'redo',
-              ],
+          anyOf: [
+            {
+              type: 'object',
+              properties: { tool: { const: 'social' }, reply: { type: 'string' } },
+              required: ['tool', 'reply'],
+              additionalProperties: false,
             },
-            term: { type: 'string' },
-            ordinal: { type: 'integer' },
-            reply: { type: 'string' },
-          },
-          required: ['tool', 'term', 'ordinal', 'reply'],
-          additionalProperties: false,
+            {
+              type: 'object',
+              properties: { tool: { enum: ['lookup', 'caption_color'] }, term: { type: 'string' } },
+              required: ['tool', 'term'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                tool: { const: 'cut_occurrence' },
+                term: { type: 'string' },
+                ordinal: { type: 'integer' },
+              },
+              required: ['tool', 'term', 'ordinal'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                tool: {
+                  enum: [
+                    'pause_after_edit',
+                    'remove_pauses',
+                    'remove_fillers',
+                    'question',
+                    'condense',
+                    'cut_passage',
+                    'edit',
+                    'undo',
+                    'redo',
+                  ],
+                },
+              },
+              required: ['tool'],
+              additionalProperties: false,
+            },
+          ],
         }
-      : stage === 'select'
+      : stage === 'brief'
         ? {
             type: 'object',
-            properties: {
-              ids: { type: 'array', maxItems: 12, items: { type: 'integer', minimum: 0, maximum: 69 } },
-            },
-            required: ['ids'],
+            properties: { reply: { type: 'string' } },
+            required: ['reply'],
             additionalProperties: false,
           }
-        : {
-            type: 'object',
-            properties: {
-              intent: {
-                type: 'string',
-                enum:
-                  stage === 'question'
-                    ? ['answer', 'inspect']
-                    : ['edit', 'clarify', 'answer', 'inspect'],
+        : stage === 'select'
+          ? {
+              type: 'object',
+              properties: {
+                ids: {
+                  type: 'array',
+                  maxItems: 12,
+                  items: { type: 'integer', minimum: 0, maximum: 69 },
+                },
               },
-              reply: { type: 'string' },
-              actions: { type: 'array', maxItems: 12, items: action },
-              windows: {
-                type: 'array',
-                maxItems: 4,
-                items: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } },
+              required: ['ids'],
+              additionalProperties: false,
+            }
+          : {
+              type: 'object',
+              properties: {
+                intent: {
+                  type: 'string',
+                  enum:
+                    stage === 'question'
+                      ? ['answer', 'inspect']
+                      : ['edit', 'clarify', 'answer', 'inspect'],
+                },
+                reply: { type: 'string' },
+                actions: { type: 'array', maxItems: 12, items: action },
+                windows: {
+                  type: 'array',
+                  maxItems: 4,
+                  items: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } },
+                },
               },
-            },
-            required: ['intent', 'reply', 'actions'],
-            additionalProperties: false,
-          };
+              required: ['intent', 'reply', 'actions'],
+              additionalProperties: false,
+            };
   const ctx = JSON.parse(input);
   const { prompt, history = [], ...evidence } = ctx;
   const messages = [
@@ -164,30 +227,36 @@ export async function generate(system, input, stage) {
   const body = {
     messages,
     temperature: 0.1,
-    max_tokens: 360,
+    max_tokens: stage === 'brief' ? 120 : stage === 'route' ? 100 : stage === 'select' ? 80 : 360,
     cache_prompt: true,
     response_format: { type: 'json_schema', json_schema: { name: 'edit_reply', schema } },
   };
-  await worker.writeFiles([{ path, content: Buffer.from(JSON.stringify(body)) }]);
-  try {
-    const result = await worker.runCommand('curl', [
-      '-sS',
+  const result = await worker.runCommand({
+    cmd: 'curl',
+    args: [
+      '-fsS',
       '--max-time',
-      '235',
+      tier === 'fast' ? '45' : '155',
       '-H',
       'Content-Type: application/json',
       '--data-binary',
-      '@' + path,
-      'http://127.0.0.1:8090/v1/chat/completions',
-    ]);
-    if (result.exitCode === 28) throw new Error('The editing model timed out. Please retry.');
-    if (result.exitCode !== 0) throw new Error('The private editing worker disconnected. Please retry.');
-
-    const response = JSON.parse(await result.stdout());
-    if (!response.choices?.[0]?.message?.content)
-      throw new Error(response.error?.message || 'The editing model returned no answer.');
-    return response.choices[0].message.content;
-  } finally {
-    await worker.runCommand('rm', ['-f', path]);
+      '@-',
+      'http://127.0.0.1:' + tiers[tier].port + '/v1/chat/completions',
+    ],
+    stdin: Readable.from([Buffer.from(JSON.stringify(body))]),
+  });
+  if (result.exitCode !== 0) {
+    connections.delete(tier);
+    throw new Error(
+      result.exitCode === 28
+        ? 'The editing model timed out. Please retry.'
+        : 'The private editing worker disconnected. Please retry.',
+    );
   }
+  const response = JSON.parse(await result.stdout());
+  const message = response.choices?.[0]?.message?.content;
+  if (!message) throw new Error(response.error?.message || 'The editing model returned no answer.');
+  JSON.parse(message);
+  onInference?.(tiers[tier].model, response.timings);
+  return message;
 }

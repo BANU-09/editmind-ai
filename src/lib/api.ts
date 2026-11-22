@@ -50,7 +50,7 @@ export function apiUrl(urlPath: string): string {
   if (!urlPath) return urlPath;
   if (/^(https?:|blob:|data:)/i.test(urlPath)) return urlPath;
   const normalizedPath = urlPath.startsWith('/') ? urlPath : `/${urlPath}`;
-  if (discoverWorker && normalizedPath==='/api/ai/plan' && getAuthToken()) return '/api/assistant';
+  if (discoverWorker && normalizedPath==='/api/ai/plan' && (getAuthToken() || confirmedGuest)) return '/api/assistant';
   if (!API_BASE_URL || !normalizedPath.startsWith('/api/')) return normalizedPath;
   if (API_BASE_URL === '/api' && (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))) {
     return normalizedPath;
@@ -80,6 +80,7 @@ export interface DemoCatalogItem {
 
 const GUEST_KEY = 'editmind_guest_id';
 let inMemoryAuthToken: string | null = null;
+let confirmedGuest=false;
 
 export function getGuestId(): string {
   let id = localStorage.getItem(GUEST_KEY);
@@ -96,6 +97,7 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string | null) {
   inMemoryAuthToken = token;
+  confirmedGuest = !token;
 }
 
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -144,8 +146,8 @@ class ApiError extends Error {
 }
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  await connectWorker();
-  const send = () => fetch(apiUrl(url), {
+  if (apiUrl(url)!=='/api/assistant') await connectWorker();
+  const send = (target=apiUrl(url)) => fetch(target, {
     ...init,
     credentials: 'include',
     headers: buildHeaders({
@@ -164,6 +166,13 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   if(retryable && [502,503,504].includes(res.status)){
     await connectWorker(true);
     res=await send();
+  }
+  // An account may sign in in another tab after this tab checked its identity.
+  // A worker-cookie session can still authorize the project on its original host.
+  if (res.status===404 && discoverWorker && confirmedGuest && !getAuthToken() && url==='/api/ai/plan') {
+    await connectWorker();
+    res=await send(API_BASE_URL+url);
+    if (res.ok) confirmedGuest=false;
   }
   const rawText = await res.text();
   let data: unknown = {};
@@ -270,7 +279,7 @@ export const api = {
 
   me: () =>
     withStaticFallback(
-      () => requestJson<{ user: UserProfile | null }>('/api/auth/me'),
+      async () => { const identity=await requestJson<{user:UserProfile|null}>('/api/auth/me'); confirmedGuest=!identity.user; return identity; },
       () => ({ user: null }),
     ),
 
