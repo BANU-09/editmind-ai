@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import { createInitialProjectState } from '../src/shared/timelineEngine';
 import type { MediaAnalysis } from '../src/shared/types';
 import { planEditFromPrompt } from './aiEditor';
+import { converse } from './conversation';
+
+test('plural pause cleanup uses measured silence while a quoted occurrence stays a word edit', async () => {
+  const analysis = makeAnalysis();
+  const state = createInitialProjectState(analysis);
+  const mistakenWordRoute = async () => JSON.stringify({ tool: 'cut_occurrence', term: 'pause', ordinal: 1 });
+  const cleanup = await converse('Please trim all the long pauses in this recording.', state, analysis, [], mistakenWordRoute);
+  assert.equal(cleanup.operations[0]?.type, 'REMOVE_SILENCES');
+  assert.equal(cleanup.operations[0].removeRanges?.length, analysis.silences.length);
+  const quoted = await converse('Remove the word "pause".', state, analysis, [], mistakenWordRoute);
+  assert.equal(quoted.operations.length, 0);
+  assert.match(quoted.intentSummary, /word-timed transcript/);
+});
 
 function makeAnalysis(): MediaAnalysis {
   return {

@@ -204,7 +204,11 @@ async function infer(system, input, stage, tier, onInference) {
       : ['brief', 'chat', 'memory'].includes(stage)
         ? {
             type: 'object',
-            properties: { reply: { type: 'string', maxLength: stage === 'chat' ? 120 : 275 } },
+            properties: {
+              reply: stage === 'brief' && tier === 'fast'
+                ? { type: 'string', maxLength: 275 }
+                : { type: 'string' },
+            },
             required: ['reply'],
             additionalProperties: false,
           }
@@ -313,7 +317,17 @@ async function infer(system, input, stage, tier, onInference) {
   const response = JSON.parse(await result.stdout());
   const message = response.choices?.[0]?.message?.content;
   if (!message) throw new Error(response.error?.message || 'The editing model returned no answer.');
-  JSON.parse(message);
+  const parsed = JSON.parse(message);
   onInference?.(tiers[tier].model, response.timings);
+  if (
+    tier === 'fast' && stage === 'brief' && [...(parsed.reply || '')].length >= 270 &&
+    !/[.!?。！？][”’"']?$/u.test(parsed.reply.trim())
+  ) {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+    const sentences = Array.from(segmenter.segment(parsed.reply));
+    const complete = sentences.slice(0, -1).map(sentence => sentence.segment).join('').trim();
+    if (!complete) return infer(system, input, stage, 'planner', onInference);
+    return JSON.stringify({ reply: complete });
+  }
   return message;
 }

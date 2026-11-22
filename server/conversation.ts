@@ -170,6 +170,10 @@ export async function converse(
     );
   if (relativeGap && /^\s*(?:(?:also|please)\s+)*(?:cut|trim|remove|delete|shorten)\b/i.test(prompt))
     route.tool = 'pause_after_edit';
+  // Unquoted plural timing terms in a standalone cleanup instruction refer to
+  // measured silence. A quoted word, ordinal or bounded section has a different scope.
+  if (/^\s*(?:(?:please|also)\s+)*(?:cut(?:\s+out)?|trim|remove|delete|shorten|reduce)\s+(?:(?:all(?:\s+of)?|the|any|unnecessary|long|awkward|extra|silent|extended|excessive)\s+)*(?:pauses|silences|silent gaps)(?:\s+(?:in|from|throughout)\s+(?:this|the|my)\s+(?:video|recording|clip|timeline))?[.!]?\s*$/i.test(prompt))
+    route.tool = 'remove_pauses';
   if (
     ['remove_pauses', 'remove_fillers', 'cut_occurrence', 'edit'].includes(route.tool) &&
     /\b(?:remove|cut|drop|trim|delete)\s+(?:the\s+)?(?:opening|introduction|intro|outro|conclusion|closing|section|passage|part)\b/i.test(
