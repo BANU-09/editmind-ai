@@ -104,8 +104,8 @@ export function VirtualVideoPlayer({
   }, [mediaUrl, posterUrl]);
 
   const mediaReconnect = useRef('');
+  useEffect(() => { mediaReconnect.current=''; }, [mediaUrl]);
   useEffect(() => {
-    mediaReconnect.current='';
     if (!isPlaying || !mediaUrl.includes('.vercel.run/')) return;
     const timer=window.setInterval(()=>{ void connectWorker(true).catch(()=>{}); }, 180_000);
     return ()=>window.clearInterval(timer);
@@ -279,7 +279,7 @@ export function VirtualVideoPlayer({
     let active = true;
     if (isPlaying && source) {
       void source.play().catch(err => {
-        if (!active || err.name === 'AbortError' || (source === videoRef.current && demoAudioUrl && source.error)) return;
+        if (!active || err.name === 'AbortError' || (source === videoRef.current && source.error && (demoAudioUrl || mediaUrl.includes('.vercel.run/')))) return;
         onPlayingChange(false);
         setPlayError('Playback could not start. Check the media file and press Play again.');
       });
@@ -452,6 +452,7 @@ export function VirtualVideoPlayer({
                 const node=e.currentTarget;
                 if (!mediaUrl.includes('.vercel.run/') || mediaReconnect.current===mediaUrl) {
                   setVideoFailed(true);
+                  if (!demoAudioUrl) { onPlayingChange(false); setPlayError('The source video could not be loaded.'); }
                   return;
                 }
                 mediaReconnect.current=mediaUrl;
@@ -461,7 +462,7 @@ export function VirtualVideoPlayer({
                   const old=new URL(mediaUrl);
                   node.src=apiUrl(old.pathname+old.search);
                   node.load();
-                } catch { if(videoRef.current===node) setVideoFailed(true); }
+                } catch { if(videoRef.current===node) {setVideoFailed(true);onPlayingChange(false);setPlayError('The media backend is unavailable.');} }
               }}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;

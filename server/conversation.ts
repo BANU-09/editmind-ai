@@ -214,19 +214,23 @@ export async function converse(
         'select',
       ),
     );
-    const selected = groups.filter((g) => Array.isArray(choice.ids) && choice.ids.includes(g.id));
-    // Anchor structural references to the transcript index when the model
-    // selects no passage. The saved source boundaries determine the actual cut.
-    if (cutting && !selected.length) {
-      const structural = /\b(?:intro(?:duction)?|opening)\b/i.test(prompt)
-        ? 'opening'
-        : /\b(?:outro|closing|conclusion)\b/i.test(prompt)
-          ? 'closing'
-          : undefined;
-      if (structural) {
-        const edge = structural === 'opening' ? groups[0] : groups.at(-1)!;
-        const named = structural === 'opening' ? /open|intro|welcome/i : /clos|conclu|outro|ending/i;
-        if (named.test(edge.topic || '') || named.test(edge.text)) selected.push(edge);
+    let selected = groups.filter((g) => Array.isArray(choice.ids) && choice.ids.includes(g.id));
+    if (cutting) {
+      const opening = /\b(?:intro(?:duction)?|opening)\b/i.test(prompt);
+      const closing = /\b(?:outro|closing|conclusion)\b/i.test(prompt);
+      // A single opening/closing is contiguous at the corresponding edge.
+      // A repeated greeting in the middle of the program is a different passage.
+      if ((opening || closing) && !/\b(?:all|every|both|each|second|third)\b/i.test(prompt)) {
+        const fromEdge = opening ? groups : [...groups].reverse();
+        const ids = new Set(selected.map((s) => s.id));
+        const edge = fromEdge[0];
+        const named = opening ? /open|intro|welcome/i : /clos|conclu|outro|ending/i;
+        if (named.test(edge.topic || '') || named.test(edge.text)) ids.add(edge.id);
+        selected = [];
+        for (const g of fromEdge) {
+          if (!ids.has(g.id)) break;
+          selected.push(g);
+        }
       }
     }
     if (!selected.length)
