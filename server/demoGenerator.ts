@@ -501,6 +501,8 @@ async function synthesizeSpeechWav(text: string, voice: string, outWav: string):
     'lavfi',
     '-i',
     `flite=text='${safeText}':voice=${voice}`,
+    '-af',
+    'loudnorm=I=-14:TP=-1.5:LRA=7',
     '-ar',
     '24000',
     '-ac',
