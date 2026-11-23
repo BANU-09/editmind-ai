@@ -178,7 +178,7 @@ function checkRenderedFile(file, expectedSeconds) {
 
 await mkdir(output, { recursive: false });
 const report = {
-  type: 'Candidate-authored practice scenarios',
+  type: 'Project practice scenarios prepared with Codex assistance',
   site: new URL(base).origin,
   startedUtc: new Date().toISOString(),
   source: { file: 'studio.mp4', seconds: duration, sha256: digest(await readFile(fixture)) },

@@ -90,19 +90,24 @@ export function VirtualVideoPlayer({
   useEffect(() => {
     setVideoFailed(!mediaUrl);
     setPlayError('');
+  }, [mediaUrl]);
+
+  useEffect(() => {
+    posterImgRef.current = null;
+    if (!videoFailed) return;
     const resolvedPoster =
       posterUrl ||
       getBundledThumbForDemo(
         mediaUrl?.split('/').find((seg) => seg.startsWith('demo-')),
       );
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
       posterImgRef.current = img;
       setPosterVersion((v) => v + 1);
     };
     img.src = resolvedPoster;
-  }, [mediaUrl, posterUrl]);
+    return () => { img.onload = null; };
+  }, [videoFailed, mediaUrl, posterUrl]);
 
   const mediaReconnect = useRef('');
   useEffect(() => { mediaReconnect.current=''; }, [mediaUrl]);
