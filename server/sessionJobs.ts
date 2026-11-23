@@ -23,6 +23,7 @@ export function jobTables() {
     task_json TEXT NOT NULL,target_id TEXT,project_id TEXT,media_id TEXT,created_at TEXT NOT NULL,ended_at TEXT,error TEXT,
     manifest_json TEXT,correlation_id TEXT NOT NULL,callback_status TEXT);
     CREATE INDEX IF NOT EXISTS edit_jobs_queue ON edit_jobs(status,created_at);
+    CREATE INDEX IF NOT EXISTS edit_jobs_media ON edit_jobs(owner,media_id,kind,created_at);
     CREATE TABLE IF NOT EXISTS edit_requests(owner TEXT NOT NULL,route TEXT NOT NULL,request_key TEXT NOT NULL,
       digest TEXT NOT NULL,code INTEGER NOT NULL,reply TEXT NOT NULL,PRIMARY KEY(owner,route,request_key));
     CREATE TABLE IF NOT EXISTS edit_sessions(id TEXT PRIMARY KEY,owner TEXT NOT NULL,project_id TEXT NOT NULL,
@@ -59,6 +60,21 @@ export function exportPath(row:JobRow) {
 }
 const failureText=(err:unknown)=> (err instanceof Error?err.message:String(err)).replace(/https?:\/\/[^\s]+/g,'[endpoint]').replace(/[A-Za-z]:\\[^\n]+/g,'[local path]').slice(0,400);
 const rate=Number(process.env.COMPUTE_USD_PER_HOUR||0);
+function sourceRights(j:JobRow,t:Task) {
+  let rights=t.rights,generated=t.generated;
+  if(j.media_id && (t.kind==='export'||t.kind==='retranscribe') && (rights===undefined||generated===undefined)){
+    // The durable intake record contains the actual user declarations, including
+    // uploads made before this inheritance existed. Prefer the original project
+    // when an owner reuses one underlying media asset for multiple projects.
+    const origin=db.prepare("SELECT task_json FROM edit_jobs WHERE owner=? AND media_id=? AND kind IN ('ingest','import_url') AND status='succeeded' ORDER BY (project_id=?) DESC, created_at DESC LIMIT 1").get(j.owner,j.media_id,j.project_id) as {task_json:string}|undefined;
+    if(origin){
+      const input:Task=JSON.parse(origin.task_json);
+      rights??=input.rights;
+      generated??=input.generated;
+    }
+  }
+  return {source:rights||'User-supplied content. Rights are the uploader’s responsibility.',ai_generated:generated??null};
+}
 function buildManifest(j:JobRow,t:Task,ended:string,warnings:string[]) {
   const media=j.media_id?db.prepare('SELECT analysis_json,source_type FROM media_assets WHERE id=?').get(j.media_id) as {analysis_json:string;source_type:string}|undefined:undefined;
   const analysis:MediaAnalysis|undefined=media?JSON.parse(media.analysis_json):undefined;
@@ -71,7 +87,7 @@ function buildManifest(j:JobRow,t:Task,ended:string,warnings:string[]) {
     settings:{resolution:t.resolution??null,quality:t.quality??null,language:t.language??analysis?.selectedLanguageOverride??'auto',storage:objectStore()},
     seed:null,deterministic_editor:true,timings:{submitted_at:j.created_at,finished_at:ended,wall_ms:elapsed,media_duration_s:analysis?.durationSec??null},
     cost:{currency:'USD',compute_hourly_rate:rate||null,estimated_compute_usd:rate?Number((rate*elapsed/3600000).toFixed(6)):null,includes_queue_wait:true},
-    rights:{source:t.rights||'User-supplied content. Rights are the uploader’s responsibility.',ai_generated:t.generated??null},warnings};
+    rights:sourceRights(j,t),warnings};
 }
 async function deliverCallback(j:JobRow,t:Task) {
   if (!t.callback) return;

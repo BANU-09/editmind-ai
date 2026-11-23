@@ -62,6 +62,7 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
     const bytes=await readFile(input);
     const submit=async()=>{
       const form=new FormData();form.append('video',new Blob([new Uint8Array(bytes)],{type:'video/mp4'}),'fixture.mp4');form.append('ai_generated','true');
+      form.append('rights','Synthetic test signal published for this verification.');
       const res=await fetch(url+'/api/v1/media/ingest',{method:'POST',headers:headers('retry-ingest'),body:form});
       assert.equal(res.status,202);assert.equal(res.headers.get('x-correlation-id'),'http-check-01');
       return (await res.json() as any).job_id;
@@ -86,7 +87,7 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
     assert.equal((await call('POST','/sessions/'+sid+'/steps',{say:'Undo',expected_hash:'wrong'})).data.error.code,'TIMELINE_CONFLICT');
     assert.ok((await call('GET','/sessions/'+sid+'/timeline.otio')).data.OTIO_SCHEMA);
     assert.equal((await call('POST','/sessions/'+sid+'/render',{callback_url:'https://invalid.example'})).res.status,400);
-    const render=await call('POST','/sessions/'+sid+'/render',{resolution:'480p',quality:'fast',callback_url:callbackUrl,ai_generated:true},'render-once');
+    const render=await call('POST','/sessions/'+sid+'/render',{resolution:'480p',quality:'fast',callback_url:callbackUrl},'render-once');
     assert.equal(render.res.status,202);
     const job=await status(render.data.job_id);
     const download=await fetch(url+job.result_links.download,{headers:headers()});
@@ -94,6 +95,7 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
     assert.match(Buffer.from(await download.arrayBuffer()).subarray(0,48).toString('latin1'),/ftyp/);
     const evidence=await (await fetch(url+job.result_links.manifest,{headers:headers()})).json() as any;
     assert.equal(evidence.rights.ai_generated,true);assert.ok(evidence.timings.wall_ms>=0);
+    assert.equal(evidence.rights.source,'Synthetic test signal published for this verification.');
     for(let i=0;i<30&&!callback;i++)await wait(50);
     assert.ok(callback);assert.equal(callback.signature,'sha256='+createHmac('sha256',secret).update(callback.body).digest('hex'));
     assert.match(logs,/"correlation_id":"http-check-01"/);

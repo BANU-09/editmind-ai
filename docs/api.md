@@ -4,6 +4,8 @@ The versioned service stores projects, sessions and asynchronous jobs in SQLite.
 
 The full contract is available at [openapi.yaml](../openapi.yaml) and through `GET /api/v1/openapi.yaml`. Paths below use the base `/api/v1`.
 
+On the hosted Vercel frontend, `GET /api/v1/endpoint` discovers the current media worker and returns its `origin`. This bootstrap belongs to the Vercel gateway. The gateway redirects `/openapi.yaml` and worker API requests with HTTP 307. Compose clients connect directly to the app port. Each serves the same worker contract.
+
 | Operation | Request | Result |
 | --- | --- | --- |
 | Upload and analyze | `POST /media/ingest` with multipart field `video` | HTTP 202 job ticket |
@@ -28,6 +30,8 @@ Compose starts a separate SeaweedFS S3-compatible service with a private network
 For a completion callback, configure exact destinations in `CALLBACK_ALLOWED_URLS` and a private `CALLBACK_HMAC_SECRET`, then supply `callback_url` on the job request. The service POSTs the job status document. Verify `X-IncuBrix-Signature` against `sha256=` followed by the lowercase hex HMAC-SHA256 of the raw HTTP body. Redirects are disabled. The service attempts delivery three times and exposes `callback_status` when delivery ends. Deduplicate deliveries by job ID.
 
 ## Diagnostics
+
+Subsequent renders and retranscription inherit the source rights and AI-generated declaration from the original versioned intake. A job can explicitly override either field. For older uploads without a declaration the source is labeled user-supplied and the AI-generated value is null.
 
 `GET /health` checks process liveness. `GET /ready` checks the database and configured S3 bucket. Both routes also support the versioned prefix. Supply `X-Correlation-Id` or read the generated ID in the response headers. Resource requests and job events emit JSON log entries with timestamp, level, correlation ID and job ID where applicable. Manifest costs use the configured `COMPUTE_USD_PER_HOUR` multiplied by elapsed wall time, including queue wait. Unconfigured costs are null and have a warning. Source rights and the AI-generated flag are supplied by the uploader.
 
