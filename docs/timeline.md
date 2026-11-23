@@ -17,4 +17,4 @@ python -m pip install opentimelineio==0.18.1 jsonschema==4.26.0
 python scripts/verify-timeline.py timeline.json timeline.otio
 ```
 
-The verifier checks the schema, continuous playback intervals, retime arithmetic, media references, both track durations and a serialization round-trip.
+The verifier checks the schema, continuous playback intervals, retime arithmetic, media references, both track durations and a serialization round-trip. The OTIO file refers to the original recording by filename. Place a copy of that recording next to the OTIO file, or relink it in your editor. The project's authenticated source download provides the original bytes. To validate an entire runner output directory and write per-session hashes, use `python scripts/verify-timeline.py --pack OUTPUTS --report evidence/otio-validation.json`.

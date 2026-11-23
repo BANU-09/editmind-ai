@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-11-23T19:18:49.608Z",
+  "result": "passed",
+  "storage": "s3",
+  "input": {
+    "kind": "generated silent video",
+    "seconds": 3,
+    "sha256": "3c01159d87b13901c6e87b842f00ce49cdc0d554edab6fb572c1150ad3965ad0",
+    "job_status": "succeeded"
+  },
+  "render": {
+    "job_status": "succeeded",
+    "duration_s": 2,
+    "bytes": 352620,
+    "http_sha256": "b77483f0901133bb41d5d992c8553c65f4509428fea91087636692c2a660aa43",
+    "s3_sha256": "b77483f0901133bb41d5d992c8553c65f4509428fea91087636692c2a660aa43"
+  },
+  "manifest": {
+    "api_equals_s3": true,
+    "sha256": "18574cdd0c8d56e2d59aaa0a980b319be294c8fe84661f54221182442007dbdd",
+    "storage": "s3"
+  },
+  "service_version": "1.0.0"
+}

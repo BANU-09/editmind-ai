@@ -1,0 +1,722 @@
+{
+  "schema_version": 1,
+  "started_utc": "2026-11-23T19:15:35.007056+00:00",
+  "connection": "discovered-worker",
+  "worker_revision": "bca792e70b37c193",
+  "base_origin": "https://editmind-ai-banu09.vercel.app",
+  "measurement": "Client wall clock over a reused HTTP connection; complete response body included. Session setup, transcription and render excluded.",
+  "projects": [
+    {
+      "label": "five-minute",
+      "source_duration_s": 300,
+      "word_count": 247,
+      "width": 320,
+      "height": 180,
+      "fps": 15,
+      "initial_timeline_duration_s": 300,
+      "runs": [
+        {
+          "setup_ms_excluded": 4779.91,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "184e322a41133c7b588f491d16b77a58211e0e4992fd6dc0cfb143602ccbeae8",
+              "duration_s": 296.777,
+              "elapsed_ms": 612.11
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "5d57d4f7ee5404eb0fb8d71f6e03fa3895150f7434b1ed2f972d5acc29afae9e",
+              "duration_s": 296.777,
+              "elapsed_ms": 630.55
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "1840b039aaa8f32d606ae91f02e5ab15717018e85eb858e579dbde57cc91c162",
+              "duration_s": 289.277,
+              "elapsed_ms": 635.79
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6643b67e238c4c642f4f875ef79f44a2187201cfe397f5c98d0643c78711423b",
+              "duration_s": 289.277,
+              "elapsed_ms": 597.39
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 598.46
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 597.65
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 650.12
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 651.37
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 605.72
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 653.4
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 640.39
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 607.15
+            }
+          ]
+        },
+        {
+          "setup_ms_excluded": 695.79,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "184e322a41133c7b588f491d16b77a58211e0e4992fd6dc0cfb143602ccbeae8",
+              "duration_s": 296.777,
+              "elapsed_ms": 659.14
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "5d57d4f7ee5404eb0fb8d71f6e03fa3895150f7434b1ed2f972d5acc29afae9e",
+              "duration_s": 296.777,
+              "elapsed_ms": 617.96
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "1840b039aaa8f32d606ae91f02e5ab15717018e85eb858e579dbde57cc91c162",
+              "duration_s": 289.277,
+              "elapsed_ms": 642.97
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6643b67e238c4c642f4f875ef79f44a2187201cfe397f5c98d0643c78711423b",
+              "duration_s": 289.277,
+              "elapsed_ms": 597.23
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 607.13
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 641.09
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 651.28
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 635.43
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 652.36
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 655.71
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 606.01
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 602.02
+            }
+          ]
+        },
+        {
+          "setup_ms_excluded": 637.48,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "184e322a41133c7b588f491d16b77a58211e0e4992fd6dc0cfb143602ccbeae8",
+              "duration_s": 296.777,
+              "elapsed_ms": 638.55
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "5d57d4f7ee5404eb0fb8d71f6e03fa3895150f7434b1ed2f972d5acc29afae9e",
+              "duration_s": 296.777,
+              "elapsed_ms": 658.8
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "1840b039aaa8f32d606ae91f02e5ab15717018e85eb858e579dbde57cc91c162",
+              "duration_s": 289.277,
+              "elapsed_ms": 652.79
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6643b67e238c4c642f4f875ef79f44a2187201cfe397f5c98d0643c78711423b",
+              "duration_s": 289.277,
+              "elapsed_ms": 654.85
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 601.93
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 636.93
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "0fc207cb6683968338d3eede8dbc4e7ca1abd02cc2a754f7690f70acfab3debd",
+              "duration_s": 289.277,
+              "elapsed_ms": 669.22
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "c5936b7d07274f44844cede656fc62b6721d34fc222319f98dc8640f8a0352cb",
+              "duration_s": 292.5,
+              "elapsed_ms": 658.37
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 633.75
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 602.68
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 653.41
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "2cbfae5ddc8625a58f1de21186bfca8fcdb041fab4fac5d716450f280b488386",
+              "duration_s": 292.5,
+              "elapsed_ms": 645.77
+            }
+          ]
+        }
+      ],
+      "step_count": 36,
+      "median_ms": 637.74,
+      "slowest_ms": 669.22,
+      "all_under_3s": true,
+      "all_statuses_expected": true,
+      "identical_across_runs": true
+    },
+    {
+      "label": "sixty-minute",
+      "source_duration_s": 3600,
+      "word_count": 7625,
+      "width": 240,
+      "height": 136,
+      "fps": 2,
+      "initial_timeline_duration_s": 3600,
+      "runs": [
+        {
+          "setup_ms_excluded": 785.7,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "d6bed2801b4671252df4499456ff9ad6650428a9c97c7abec13951c9bd9083ea",
+              "duration_s": 3596.84,
+              "elapsed_ms": 859.5
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "ba2d7902a213b74b60814bdb6e4bc227f0b2d3dae36a54ccbed84a0f64af4c9e",
+              "duration_s": 3596.84,
+              "elapsed_ms": 974.47
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0b96f09875e0c54edd7aa3fb7843e9da65e3ad32cca8bec747cad6a537cb4922",
+              "duration_s": 3589.34,
+              "elapsed_ms": 891.84
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "e7f04cf13f52a2bef0d953e5546335b87b85baf2ad04f5822f314dcd874d77f1",
+              "duration_s": 3589.34,
+              "elapsed_ms": 850.81
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 833.76
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 948.54
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 869.59
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 1078.58
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 805.84
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 830.99
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 847.48
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 822.36
+            }
+          ]
+        },
+        {
+          "setup_ms_excluded": 854.01,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "d6bed2801b4671252df4499456ff9ad6650428a9c97c7abec13951c9bd9083ea",
+              "duration_s": 3596.84,
+              "elapsed_ms": 851.46
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "ba2d7902a213b74b60814bdb6e4bc227f0b2d3dae36a54ccbed84a0f64af4c9e",
+              "duration_s": 3596.84,
+              "elapsed_ms": 980.52
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0b96f09875e0c54edd7aa3fb7843e9da65e3ad32cca8bec747cad6a537cb4922",
+              "duration_s": 3589.34,
+              "elapsed_ms": 3467.22
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "e7f04cf13f52a2bef0d953e5546335b87b85baf2ad04f5822f314dcd874d77f1",
+              "duration_s": 3589.34,
+              "elapsed_ms": 797.54
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 875.37
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 936.24
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 861.91
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 843.81
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 898.89
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 840.08
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 857.51
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 824.41
+            }
+          ]
+        },
+        {
+          "setup_ms_excluded": 781.23,
+          "steps": [
+            {
+              "instruction": "Cut the first 3 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "d6bed2801b4671252df4499456ff9ad6650428a9c97c7abec13951c9bd9083ea",
+              "duration_s": 3596.84,
+              "elapsed_ms": 845.24
+            },
+            {
+              "instruction": "Add caption \"Review copy\" at 0:15 for 2 seconds",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "ba2d7902a213b74b60814bdb6e4bc227f0b2d3dae36a54ccbed84a0f64af4c9e",
+              "duration_s": 3596.84,
+              "elapsed_ms": 792.27
+            },
+            {
+              "instruction": "Speed up from 0:40 to 0:55 by 2x",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0b96f09875e0c54edd7aa3fb7843e9da65e3ad32cca8bec747cad6a537cb4922",
+              "duration_s": 3589.34,
+              "elapsed_ms": 817.89
+            },
+            {
+              "instruction": "Mute 25 to 27",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "e7f04cf13f52a2bef0d953e5546335b87b85baf2ad04f5822f314dcd874d77f1",
+              "duration_s": 3589.34,
+              "elapsed_ms": 927.49
+            },
+            {
+              "instruction": "Add background music",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 854.41
+            },
+            {
+              "instruction": "Put the intro back",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 818.19
+            },
+            {
+              "instruction": "Undo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "UNDO",
+              "timeline_hash": "6821fcccbb37ec3414faf2798abd03fafbd9903f64abaf5a1ba0fe43242d2175",
+              "duration_s": 3589.34,
+              "elapsed_ms": 883.09
+            },
+            {
+              "instruction": "Redo",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "REDO",
+              "timeline_hash": "74e23c78170a556de6edc17736f0cd66637a2ba72faf8400d0d5bf0ad710ce51",
+              "duration_s": 3592.5,
+              "elapsed_ms": 776.58
+            },
+            {
+              "instruction": "Make that caption red",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "EDIT_APPLIED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 852.64
+            },
+            {
+              "instruction": "Cut the boring part",
+              "expected_status": "needs_clarification",
+              "status": "needs_clarification",
+              "code": "CHOOSE_OPTION",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 784.96
+            },
+            {
+              "instruction": "Cancel",
+              "expected_status": "applied",
+              "status": "applied",
+              "code": "CANCELLED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 871.45
+            },
+            {
+              "instruction": "Speed up 10x",
+              "expected_status": "rejected",
+              "status": "rejected",
+              "code": "INVALID_SPEED",
+              "timeline_hash": "0c7a914e27e6e077fe913ffea2e5b2bd66ed8b1e8e81e9f47f1ae737f5f353da",
+              "duration_s": 3592.5,
+              "elapsed_ms": 755.47
+            }
+          ]
+        }
+      ],
+      "step_count": 36,
+      "median_ms": 852.05,
+      "slowest_ms": 3467.22,
+      "all_under_3s": false,
+      "all_statuses_expected": true,
+      "identical_across_runs": true
+    }
+  ]
+}

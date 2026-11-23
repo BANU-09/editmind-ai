@@ -77,6 +77,7 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
     const sid=session.data.session_id;
     const output=await call('POST','/sessions/'+sid+'/steps',{say:'Cut the first 1 second'},'cut-1');
     assert.equal(output.res.status,200);assert.equal(output.data.status,'applied',JSON.stringify(output.data));
+    assert.match(output.res.headers.get('Server-Timing')||'',/^session;dur=\d/);
     const same=await call('POST','/sessions/'+sid+'/steps',{say:'Cut the first 1 second'},'cut-1');
     assert.deepEqual(same.data,output.data);assert.equal(same.res.headers.get('Idempotency-Replayed'),'true');
     const conflict=await call('POST','/sessions/'+sid+'/steps',{say:'Undo'},'cut-1');assert.equal(conflict.res.status,409);
@@ -98,6 +99,26 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
     assert.match(logs,/"correlation_id":"http-check-01"/);
     const original=await fetch(url+'/api/v1/projects/'+p+'/source',{headers:headers()});
     assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes);
+    // A previous release embedded the original timeline in each session row.
+    // Seed that actual representation and verify its first write migrates both
+    // snapshots, preserves undo, and stores the large JSON as compressed blobs.
+    const legacyDb=new Database(path.join(temporary,'editmind.db'));
+    try {
+      const saved=legacyDb.prepare('SELECT state_json FROM projects WHERE id=?').get(p) as {state_json:string};
+      const baseline=JSON.parse(saved.state_json);
+      baseline.segments[0].label='long transcript metadata '.repeat(5000);
+      const legacyState={version:1,original:baseline,state:baseline,events:[],cursor:0};
+      const legacy='session-before-upgrade';
+      legacyDb.prepare('INSERT INTO edit_sessions(id,owner,project_id,session_json,created_at) VALUES(?,?,?,?,?)').run(legacy,'guest:'+guest,p,JSON.stringify(legacyState),new Date().toISOString());
+      const untouched=await call('GET','/sessions/'+legacy);
+      const edited=await call('POST','/sessions/'+legacy+'/steps',{say:'Cut the first 1 second'});
+      assert.equal(edited.data.status,'applied');
+      const undone=await call('POST','/sessions/'+legacy+'/steps',{say:'Undo'});
+      assert.equal(undone.data.timeline_hash,untouched.data.timeline_hash);
+      const storage=legacyDb.prepare('SELECT typeof(s.session_json) AS current_type,typeof(o.original_json) AS original_type,length(s.session_json)+length(o.original_json) AS bytes FROM edit_sessions s JOIN edit_session_originals o ON o.session_id=s.id WHERE s.id=?').get(legacy) as any;
+      assert.equal(storage.current_type,'blob');assert.equal(storage.original_type,'blob');
+      assert.ok(storage.bytes<JSON.stringify(legacyState).length/2);
+    }finally{legacyDb.close();}
   }finally{
     child.kill();if(child.exitCode===null)await Promise.race([new Promise(r=>child.once('exit',r)),wait(4000)]);
     await new Promise<void>(r=>receiver.close(()=>r()));await rm(temporary,{recursive:true,force:true,maxRetries:3});

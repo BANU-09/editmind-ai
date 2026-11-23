@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import {videoUploadStorage} from './server/hashedUpload';
 import {installSessionApi,apiErrorHandler} from './server/sessionApi';
 import {createHash} from 'node:crypto';
 import {Transform, Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import bcrypt from 'bcryptjs';
-import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
@@ -69,8 +69,6 @@ import {
   isRemoteWorkerConfigured,
   sendWorkerCallback,
 } from './server/workerBridge';
-
-dotenv.config();
 
 const cfg = getAppConfig();
 const PORT = cfg.port || 3000;
@@ -382,7 +380,7 @@ async function startServer() {
       'Access-Control-Allow-Headers',
       'Content-Type, Authorization, x-guest-id, Idempotency-Key, Range, x-worker-secret, x-requested-with, X-Correlation-Id',
     );
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length, X-Correlation-Id, Idempotency-Replayed');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length, X-Correlation-Id, Idempotency-Replayed, Server-Timing');
     if (req.method === 'OPTIONS') {
       res.status(204).end();
       return;

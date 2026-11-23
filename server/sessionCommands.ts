@@ -67,7 +67,7 @@ function addText(
 ) {
   checkBounds(r, a.durationSec);
   if (!visible(state, r.start, r.end))
-    fail('The selected content was removed. Restore it before adding text.', 'CONTENT_REMOVED');
+    fail('The selected content was removed. Restore it before adding text.', 'CONTENT_REMOVED', r);
   if (!text.trim()) fail('Caption text is empty.');
   if (kind === 'caption')
     return op('ADD_CAPTION', 'Add caption “' + text + '”', {
@@ -83,7 +83,7 @@ function addText(
       },
     });
   const mapped = mapSourceRangeToTimeline(state.segments, r.start, r.end);
-  if (!mapped) fail('The source interval is no longer on the timeline.', 'CONTENT_REMOVED');
+  if (!mapped) fail('The source interval is no longer on the timeline.', 'CONTENT_REMOVED', r);
   return op('ADD_TEXT_OVERLAY', 'Add overlay “' + text + '”', {
     overlay: {
       text,

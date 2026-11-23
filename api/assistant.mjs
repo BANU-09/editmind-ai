@@ -1,4 +1,5 @@
 import planner from '../.media-worker/planner.cjs';
+import hosting from '../config/hosted.json' with {type:'json'};
 import { generate } from '../server/privateModel.mjs';
 const { planResponse } = planner;
 
@@ -8,7 +9,7 @@ let discovering;
 async function mediaOrigin(refresh = false) {
   if (!refresh && cachedOrigin && cachedOrigin.until > Date.now()) return cachedOrigin.url;
   discovering ??= (async () => {
-    const url = 'https://editmind-ai-banu09.vercel.app/api/backend' + (refresh ? '?refresh=1' : '');
+    const url = new URL('/api/backend' + (refresh ? '?refresh=1' : ''), process.env.EDITMIND_PUBLIC_ORIGIN || hosting.publicOrigin);
     const lookup = await fetch(url, { signal: AbortSignal.timeout(150000) });
     if (!lookup.ok) throw new Error('The media worker is unavailable.');
     const { origin } = await lookup.json();

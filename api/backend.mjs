@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import build from '../.media-worker/revision.json' with { type: 'json' };
 import sdk from '../.media-worker/sdk.cjs';
+import hosting from '../config/hosted.json' with {type:'json'};
 const { Drive, Sandbox } = sdk;
 
 let pending;
@@ -19,7 +20,8 @@ function workerEnvironment() {
       AWS_SESSION_TOKEN:'EDITMIND_S3_SESSION_TOKEN',
     })) if (process.env[setting]) env[key]=process.env[setting];
   }
-  return env;
+  return {PORT:String(hosting.media.port),STORAGE_DIR:hosting.media.data,TEMP_MEDIA_DIR:hosting.media.temp,
+    ANALYSIS_AUDIO_DIR:hosting.media.audio,EDITMIND_PUBLIC_ORIGIN:hosting.publicOrigin,...env};
 }
 
 async function health(origin) {
@@ -30,27 +32,27 @@ async function health(origin) {
 }
 
 async function startBackend() {
-  const drive = await Drive.getOrCreate({ name: 'editmind-project-data' });
+  const drive = await Drive.getOrCreate({ name: hosting.media.drive });
   const sandbox = await Sandbox.getOrCreate({
-    name: 'editmind-media', ports: [3000], image: 'vercel/sandbox/node:24',
-    resources: { vcpus: 2 }, timeout: 45 * 60 * 1000,
+    name: hosting.media.name, ports: [hosting.media.port], image: hosting.sandboxImage,
+    resources: { vcpus: hosting.media.vcpus }, timeout: hosting.sandboxMinutes * 60 * 1000,
     persistent: true, keepLastSnapshots: { count: 1 },
-    mounts: { '/mnt/editmind': drive }
+    mounts: { [hosting.media.mount]: drive }
   });
   // Renew only when the running session is being used near its time limit.
   if (sandbox.expiresAt && sandbox.expiresAt.getTime()-Date.now()<6*60_000) {
     await sandbox.extendTimeout(8*60_000).catch(()=>{});
   }
-  const origin = sandbox.domain(3000);
+  const origin = sandbox.domain(hosting.media.port);
   const old=await health(origin);
   if (old?.ok && old.mediaRevision!==build.revision) {
     // Preserve in-flight work when updating an already running media server.
-    const upgrade=await sandbox.runCommand({cmd:'bash',args:['-c',String.raw`set -eu
+    const upgrade=await sandbox.runCommand({cmd:'bash',env:{EDITMIND_DB_PATH:hosting.media.data+'/editmind.db'},args:['-c',String.raw`set -eu
 for pid in $(pgrep -f '^node server[.]mjs$'); do
   dir=$(readlink /proc/$pid/cwd)
   case "$dir" in */editmind-*) ;; *) continue ;; esac
   cd "$dir"
-  node --input-type=module -e "import DB from 'better-sqlite3';const db=new DB('/mnt/editmind/storage/editmind.db',{readonly:true});const active=db.prepare(\"SELECT COUNT(*) n FROM analysis_jobs WHERE status IN ('queued','extracting-audio','transcribing','aligning','generating-captions')\").get().n+db.prepare(\"SELECT COUNT(*) n FROM exports WHERE status IN ('queued','rendering','validating')\").get().n;process.exit(active?42:0)"
+  node --input-type=module -e "import DB from 'better-sqlite3';const db=new DB(process.env.EDITMIND_DB_PATH,{readonly:true});const active=db.prepare(\"SELECT COUNT(*) n FROM analysis_jobs WHERE status IN ('queued','extracting-audio','transcribing','aligning','generating-captions')\").get().n+db.prepare(\"SELECT COUNT(*) n FROM exports WHERE status IN ('queued','rendering','validating')\").get().n;process.exit(active?42:0)"
   kill -TERM "$pid"
 done` ]});
     if (upgrade.exitCode===42) return origin;

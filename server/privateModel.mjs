@@ -1,11 +1,9 @@
 import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import sdk from '../.media-worker/sdk.cjs';
+import hosting from '../config/hosted.json' with {type:'json'};
 
-const tiers = {
-  fast: { port: 8091, model: 'Qwen2.5-1.5B-Instruct' },
-  planner: { port: 8090, model: 'Qwen3-4B-Instruct-2507' },
-};
+const tiers = hosting.language.tiers;
 const starting = new Map();
 const connections = new Map();
 let retryFastAfter = 0;
@@ -29,12 +27,12 @@ async function connectionForRequest(tier) {
 }
 async function connect(tier) {
   const worker = await sdk.Sandbox.getOrCreate({
-    name: 'editmind-language',
+    name: hosting.language.name,
     resume: true,
-    image: 'vercel/sandbox/node:24',
+    image: hosting.sandboxImage,
     ports: [],
-    resources: { vcpus: 4 },
-    timeout: 45 * 60 * 1000,
+    resources: { vcpus: hosting.language.vcpus },
+    timeout: hosting.sandboxMinutes * 60 * 1000,
     persistent: true,
     keepLastSnapshots: { count: 1 },
   });
@@ -56,7 +54,10 @@ async function connect(tier) {
   const start = await worker.runCommand({
     cmd: 'flock',
     args: ['-n', '-E', '73', '/tmp/editmind-model-' + tier + '.lock', 'bash', '-c', script],
-    env: { EDITMIND_MODEL_TIER: tier },
+    env: {EDITMIND_MODEL_DIR:hosting.language.directory,EDITMIND_MODEL_FILE:tiers[tier].file,
+      EDITMIND_MODEL_URL:tiers[tier].url,EDITMIND_MODEL_SHA:tiers[tier].sha256,
+      EDITMIND_MODEL_PORT:String(tiers[tier].port),EDITMIND_MODEL_CONTEXT:String(tiers[tier].context),
+      EDITMIND_MODEL_THREADS:String(hosting.language.vcpus)},
     detached: true,
   });
   for (let i = 0; i < 56; i++) {

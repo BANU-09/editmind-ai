@@ -1315,7 +1315,8 @@ export function buildSegmentsAndSummaryFromWords(params: {
   topics: string[];
   summary: string;
 } {
-  const { mediaId, rawWords, silences, durationSec, language = 'en' } = params;
+  const { mediaId, silences, durationSec, language = 'en' } = params;
+  const rawWords = params.rawWords.map(word => ({...word}));
   if (rawWords.length === 0) {
     return {
       transcript: [],
@@ -1328,6 +1329,25 @@ export function buildSegmentsAndSummaryFromWords(params: {
   }
 
   const orderedSilences = [...silences].sort((a, b) => a.start - b.start);
+  // Whisper may stretch a final word halfway through a quiet gap or put the
+  // first consonant of the next phrase late. Adjust only the two boundary
+  // words when measured sustained silence supports that change.
+  let firstAfter = 0;
+  for (const silence of orderedSilences) {
+    if (silence.end - silence.start < 0.45) continue;
+    while (firstAfter < rawWords.length && rawWords[firstAfter].end <= silence.end + 0.025) firstAfter++;
+    const last = rawWords[firstAfter - 1], next = rawWords[firstAfter];
+    if (last && !last.manuallyEdited && last.start < silence.start - 0.04 &&
+        last.end >= silence.start - 0.12 && last.end <= silence.end) {
+      last.end = Math.min(durationSec, silence.start + 0.015);
+      last.timingAccuracy = 'aligned';
+    }
+    if (next && !next.manuallyEdited && next.start >= silence.start && next.start <= silence.end + 0.4 &&
+        next.end > silence.end + 0.04 && (!last || last.end < silence.end - 0.12)) {
+      next.start = Math.max(last?.end ?? 0, silence.end - 0.015);
+      next.timingAccuracy = 'aligned';
+    }
+  }
   let silCursor = 0;
 
   const groups: RawRecognizedWord[][] = [];

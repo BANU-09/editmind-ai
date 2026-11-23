@@ -16,12 +16,13 @@ if [[ ! -f .installed ]]; then
   node --input-type=module -e "import DB from 'better-sqlite3'; new DB(':memory:').close();"
   touch .installed
 fi
-export EDITMIND_PLANNER_URL=https://editmind-ai-banu09.vercel.app/api/assistant
-export NODE_ENV=production PORT=3000 STT_PROVIDER=whisper STT_CONCURRENCY=1
-export STT_WHISPER_MODEL=Xenova/whisper-base
-export TEMP_MEDIA_DIR=/vercel/editmind-temp
-export ANALYSIS_AUDIO_DIR=/vercel/editmind-pcm
-export STORAGE_DIR=/mnt/editmind/storage
-export CORS_ORIGIN=https://editmind-ai-banu09.vercel.app
+export EDITMIND_PUBLIC_ORIGIN="${EDITMIND_PUBLIC_ORIGIN:-https://editmind-ai-banu09.vercel.app}"
+export EDITMIND_PLANNER_URL="${EDITMIND_PLANNER_URL:-$EDITMIND_PUBLIC_ORIGIN/api/assistant}"
+export NODE_ENV=production PORT="${PORT:-3000}" STT_PROVIDER="${STT_PROVIDER:-whisper}" STT_CONCURRENCY="${STT_CONCURRENCY:-1}"
+export STT_WHISPER_MODEL="${STT_WHISPER_MODEL:-Xenova/whisper-base}"
+export TEMP_MEDIA_DIR="${TEMP_MEDIA_DIR:?missing media scratch directory}"
+export ANALYSIS_AUDIO_DIR="${ANALYSIS_AUDIO_DIR:?missing analysis directory}"
+export STORAGE_DIR="${STORAGE_DIR:?missing storage directory}"
+export CORS_ORIGIN="${CORS_ORIGIN:-$EDITMIND_PUBLIC_ORIGIN}"
 export EDITMIND_MEDIA_RELEASE="$(cat revision)"
 exec node server.mjs

@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pipeline} from 'node:stream/promises';
 import {db} from './db';
-import {createSession,stepSession,timelineHash,type EditingSession} from './sessionEngine';
+import {createSession,stepSession,timelineHash} from './sessionEngine';
+import {createSessionStorage,findSessionRow,insertSession,loadSession,persistStep} from './sessionPersistence';
 import {toOtio} from './sessionOtio';
 import {probeStore,getObject,objectStore} from './sessionStore';
 import {callbackAllowed,enqueue,exportPath,findJob,jobResponse,jobTables,logEvent,shaFile,startJobLoop,type Ingest,type Principal,type Task} from './sessionJobs';
@@ -38,6 +39,7 @@ const stable=(value:any):any=>Array.isArray(value)?value.map(stable):value && ty
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 type Reply={code:number;value:any};
 function write(req:Request,res:Response,input:unknown,operation:()=>Reply) {
+  const start=performance.now();
   const key=req.get('Idempotency-Key');
   if(key && (key.length>180 || !key.trim()))fail(400,'INVALID_REQUEST','Invalid Idempotency-Key.');
   const owner=res.locals.owner as string;
@@ -55,6 +57,7 @@ function write(req:Request,res:Response,input:unknown,operation:()=>Reply) {
     if(key)db.prepare('INSERT INTO edit_requests(owner,route,request_key,digest,code,reply) VALUES(?,?,?,?,?,?)').run(owner,route,key,fingerprint,r.code,JSON.stringify(r.value));
     return {...r,replay:false};
   }).immediate();
+  if(req.route?.path==='/sessions/:sid/steps')res.set('Server-Timing','session;dur='+(performance.now()-start).toFixed(2));
   res.set('Idempotency-Replayed',String(result.replay)).status(result.code).json(result.value);
   return result.replay as boolean;
 }
@@ -84,7 +87,7 @@ function project(id:string,ctx:Principal) {
   return row;
 }
 function sessionRow(id:string,owner:string) {
-  const r=db.prepare('SELECT session_json,project_id FROM edit_sessions WHERE id=? AND owner=?').get(id,owner) as {session_json:string;project_id:string}|undefined;
+  const r=findSessionRow(id,owner);
   if(!r)fail(404,'NOT_FOUND');return r;
 }
 function ownedJob(id:string,owner:string) {
@@ -93,6 +96,7 @@ function ownedJob(id:string,owner:string) {
 }
 export function installSessionApi(app:Express, deps:{auth:(req:Request)=>Principal;upload:RequestHandler;ingest:Ingest}){
   jobTables();
+  createSessionStorage();
   startJobLoop(deps.ingest);
   const router=express.Router();
   const counts=new Map<string,{reset:number;count:number}>();
@@ -173,36 +177,40 @@ export function installSessionApi(app:Express, deps:{auth:(req:Request)=>Princip
     write(req,res,req.body??{},()=>{
       const id='ses-'+randomUUID();
       const s=createSession(JSON.parse(p.analysis_json) as MediaAnalysis,JSON.parse(p.state_json) as ProjectState);
-      db.prepare('INSERT INTO edit_sessions(id,owner,project_id,session_json,created_at) VALUES(?,?,?,?,?)').run(id,res.locals.owner,p.id,JSON.stringify(s),new Date().toISOString());
+      insertSession(id,res.locals.owner,p.id,s,new Date().toISOString());
       return {code:201,value:{session_id:id,project_id:p.id,timeline_hash:timelineHash(s.state),duration_s:s.state.duration}};
     });
   });
   router.get('/sessions/:sid',(req,res)=>{
-    const sr=sessionRow(req.params.sid,res.locals.owner); const s:EditingSession=JSON.parse(sr.session_json);
+    const sr=sessionRow(req.params.sid,res.locals.owner); const s=loadSession(req.params.sid,res.locals.owner,sr).session;
     const history=db.prepare('SELECT response FROM edit_steps WHERE session_id=? ORDER BY seq').all(req.params.sid) as {response:string}[];
     res.json({session_id:req.params.sid,project_id:sr.project_id,timeline:s.state,timeline_hash:timelineHash(s.state),duration_s:s.state.duration,history:history.map(v=>JSON.parse(v.response))});
   });
   router.post('/sessions/:sid/steps',(req,res)=>{
     if(typeof req.body?.say!=='string'||!req.body.say.trim()||req.body.say.length>8000)fail(400,'INVALID_REQUEST','say must be between 1 and 8000 characters.');
+    let afterCommit:(()=>void)|undefined;
     write(req,res,req.body,()=>{
       const r=sessionRow(req.params.sid,res.locals.owner);
       const p=project(r.project_id,res.locals.ctx);
-      const session:EditingSession=JSON.parse(r.session_json);
+      const loaded=loadSession(req.params.sid,res.locals.owner,r);
+      const session=loaded.session;
       if(req.body.expected_hash && req.body.expected_hash!==timelineHash(session.state))fail(409,'TIMELINE_CONFLICT');
       const {session:updated,response}=stepSession(session,JSON.parse(p.analysis_json),req.body.say);
-      db.prepare('UPDATE edit_sessions SET session_json=? WHERE id=?').run(JSON.stringify(updated),req.params.sid);
+      afterCommit=persistStep(req.params.sid,res.locals.owner,r.seq+1,loaded,updated);
       db.prepare('INSERT INTO edit_steps(session_id,seq,response) SELECT ?,coalesce(max(seq),0)+1,? FROM edit_steps WHERE session_id=?').run(req.params.sid,JSON.stringify(response),req.params.sid);
       return {code:200,value:response};
     });
+    afterCommit?.();
   });
   router.post('/sessions/:sid/render',(req,res)=>{
     const sr=sessionRow(req.params.sid,res.locals.owner);
     const p=project(sr.project_id,res.locals.ctx);
-    write(req,res,req.body??{},()=>queue({kind:'export',ctx:res.locals.ctx,sessionId:req.params.sid,projectId:p.id,mediaId:p.media_id,state:JSON.parse(sr.session_json).state,...renderOptions(req.body),...taskMeta(req.body)},res));
+    write(req,res,req.body??{},()=>queue({kind:'export',ctx:res.locals.ctx,sessionId:req.params.sid,projectId:p.id,mediaId:p.media_id,state:loadSession(req.params.sid,res.locals.owner,sr).session.state,...renderOptions(req.body),...taskMeta(req.body)},res));
   });
   router.get('/sessions/:sid/timeline.otio',(req,res)=>{
     const sr=sessionRow(req.params.sid,res.locals.owner),p=project(sr.project_id,res.locals.ctx);
-    res.attachment('timeline.otio').json(toOtio(JSON.parse(sr.session_json).state,JSON.parse(p.analysis_json),'/api/v1/projects/'+p.id+'/source'));
+    const sourceName=path.posix.basename(path.win32.basename(p.filename));
+    res.attachment('timeline.otio').json(toOtio(loadSession(req.params.sid,res.locals.owner,sr).session.state,JSON.parse(p.analysis_json),encodeURIComponent(sourceName)));
   });
   router.get('/jobs/:id',(req,res)=>{const j=ownedJob(req.params.id,res.locals.owner);res.locals.job_id=j.id;res.json(jobResponse(j));});
   router.get('/jobs/:id/manifest',(req,res)=>{

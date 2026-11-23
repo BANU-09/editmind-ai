@@ -12,7 +12,7 @@ From the repository root, start the web app, SQLite-backed job service and S3-co
 docker compose up --build
 ```
 
-Visit http://localhost:3000 and check readiness at http://localhost:3000/ready. Configuration defaults and overrides are in [.env.example](.env.example). The Compose service stores the database and uploaded files in named volumes. The production website has a separate persisted deployment described in [DEPLOY.md](DEPLOY.md).
+Visit http://localhost:3000 and check readiness at http://localhost:3000/ready. Configuration defaults and overrides are in [.env.example](.env.example). Compose stores rendered outputs in SeaweedFS and uses named volumes for persistent data. The public site stores outputs on a Vercel Drive. Operators can configure an external S3 bucket. [Hosting settings](config/hosted.json) · [Production setup](DEPLOY.md)
 
 For development or tests on the host, install Node.js 24, npm, FFmpeg with FFprobe, libx264, libass and libflite, and a font such as DejaVu Sans. Install locked dependencies once with `npm ci`. Run `npm test` to start an isolated HTTP server and execute the unit, session, media and integration tests. Local speech recognition runs on CPU. A cold test installation needs network access to fetch the speech model. Use `npm run lint` for TypeScript and `npm run build` for the web bundle.
 

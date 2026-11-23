@@ -11,6 +11,7 @@ import datetime
 import json
 import os
 from pathlib import Path
+import re
 from statistics import median
 import time
 import uuid
@@ -45,7 +46,9 @@ def post(client, url, payload):
         except (ValueError, KeyError, TypeError):
             code = "HTTP_ERROR"
         raise RuntimeError(f"HTTP {reply.status_code} {code}")
-    return reply.json(), round(elapsed_ms, 2)
+    backend = re.search(r"(?:^|,)\s*(?:session|edit|step)\s*;\s*dur=([0-9.]+)",
+                        reply.headers.get("Server-Timing", ""), re.I)
+    return reply.json(), round(elapsed_ms, 2), float(backend.group(1)) if backend else None
 
 
 def bench(base, path, label, repeats):
@@ -59,21 +62,25 @@ def bench(base, path, label, repeats):
         word_count = sum(len(s.get("words", [])) for s in analysis["transcript"])
         runs = []
         for _ in range(repeats):
-            new, setup_ms = post(client, base + "/projects/" + private["pid"] + "/sessions", {})
+            new, setup_ms, _ = post(client, base + "/projects/" + private["pid"] + "/sessions", {})
             url = base + "/sessions/" + new["session_id"] + "/steps"
             rows = []
             for say, expected in STEPS:
-                result, elapsed_ms = post(client, url, {"say": say})
+                result, elapsed_ms, backend_ms = post(client, url, {"say": say})
                 rows.append({"instruction": say, "expected_status": expected, "status": result["status"],
                              "code": result["code"], "timeline_hash": result["timeline_hash"],
-                             "duration_s": result["duration_s"], "elapsed_ms": elapsed_ms})
+                             "duration_s": result["duration_s"], "elapsed_ms": elapsed_ms,
+                             **({"server_ms": backend_ms} if backend_ms is not None else {})})
             runs.append({"setup_ms_excluded": setup_ms, "steps": rows})
     times = [item["elapsed_ms"] for run in runs for item in run["steps"]]
+    server = [item["server_ms"] for run in runs for item in run["steps"] if "server_ms" in item]
     signatures = [[(item["status"], item["timeline_hash"]) for item in run["steps"]] for run in runs]
     return {"label": label, "source_duration_s": source_duration, "word_count": word_count,
             "width": analysis.get("width"), "height": analysis.get("height"), "fps": analysis.get("fps"),
             "initial_timeline_duration_s": new["duration_s"], "runs": runs, "step_count": len(times),
             "median_ms": round(median(times), 2), "slowest_ms": max(times), "all_under_3s": max(times) < 3000,
+            **({"server_median_ms": round(median(server), 2), "server_slowest_ms": max(server)}
+               if len(server) == len(times) else {}),
             "all_statuses_expected": all(row["status"] == row["expected_status"] for run in runs for row in run["steps"]),
             "identical_across_runs": all(sig == signatures[0] for sig in signatures)}
 

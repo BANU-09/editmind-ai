@@ -64,7 +64,10 @@ export class ProceduralMusicBed {
 
   public update(opts: { active: boolean; preset: MusicPreset; volume: number; offset?: number }) {
     const ctx = getSharedAudioContext();
-    if (!ctx || !opts.active) { this.stop(); return; }
+    if (!ctx || !opts.active) {
+      this.stop();
+      return;
+    }
     const level = Math.max(0, Math.min(1, opts.volume));
     if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
     if (!this.source || this.preset !== opts.preset) {
@@ -92,13 +95,19 @@ export class ProceduralMusicBed {
 
   public stop() {
     if (!this.source || !this.gain) return;
-    const source = this.source, gain = this.gain;
+    const source = this.source,
+      gain = this.gain;
     gain.gain.setTargetAtTime(0, gain.context.currentTime, 0.012);
     source.stop(gain.context.currentTime + 0.06);
-    source.onended = () => { source.disconnect(); gain.disconnect(); };
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
     this.source = undefined;
     this.gain = undefined;
   }
 
-  public dispose() { this.stop(); }
+  public dispose() {
+    this.stop();
+  }
 }
