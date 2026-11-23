@@ -1,0 +1,545 @@
+{
+  "environment": "Local Windows API, FFmpeg and CPU Xenova/whisper-base. Authenticated owner isolation. Local response times exclude upload, transcription and rendering.",
+  "sessionsMatched": 15,
+  "freshSessions": 45,
+  "submittedMessagesPerPass": 46,
+  "mp4sValidated": 15,
+  "maxLengthErrorFrames": 0.45,
+  "hashComparison": "Compared status, code, duration and timeline hash after every instruction and clarification answer; then compared final state hashes. Repeat exports are recorded separately with matched/different binary hashes and decoded audio comparisons for differing encodes.",
+  "sessions": [
+    {
+      "session": "01-editor-session",
+      "specifiedSteps": 8,
+      "submittedMessages": 9,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "d24672e2533d4d49e7b9fe89c0855fd007a173ed8aec31ba1415ed4b7ba4a6ad",
+        "repeatSha256": "d24672e2533d4d49e7b9fe89c0855fd007a173ed8aec31ba1415ed4b7ba4a6ad",
+        "byteIdentical": true
+      },
+      "finalHash": "773978d292bd70e9c8583797a52351f449a9f8f79d13e9d28f2d71cb3bc1bd7f",
+      "outputVideoSeconds": 71.2,
+      "outputLengthErrorFrames": 0.45,
+      "medianApiStepMs": 40,
+      "maxApiStepMs": 62,
+      "statusCounts": {
+        "applied": 8,
+        "needs_clarification": 1
+      }
+    },
+    {
+      "session": "02-history",
+      "specifiedSteps": 3,
+      "submittedMessages": 3,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "7fa23c1ff63767e95fb32cc4838ccdf0fa2b558259b375a75f247cdd5e84c84d",
+        "repeatSha256": "7fa23c1ff63767e95fb32cc4838ccdf0fa2b558259b375a75f247cdd5e84c84d",
+        "byteIdentical": true
+      },
+      "finalHash": "fa58a23ce9667d401786d45ec9be7f98386470a8bbd0b90bb4f002b31fd48bba",
+      "outputVideoSeconds": 110,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 7,
+      "maxApiStepMs": 8,
+      "statusCounts": {
+        "applied": 3
+      }
+    },
+    {
+      "session": "03-source-text",
+      "specifiedSteps": 3,
+      "submittedMessages": 3,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "34c3f33720de3e987fd0bc274e61cd9310a4691041bdb2c35b1b4b3bbc6dd2d2",
+        "repeatSha256": "34c3f33720de3e987fd0bc274e61cd9310a4691041bdb2c35b1b4b3bbc6dd2d2",
+        "byteIdentical": true
+      },
+      "finalHash": "5daf128eb9b0eebc478a71fee42a2ec48107fbbf015c8184b1ca3886e505bf12",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 101,
+      "maxApiStepMs": 339,
+      "statusCounts": {
+        "applied": 3
+      }
+    },
+    {
+      "session": "04-compound",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "27271b732276ca7ae09017751b17d1781b2dcd67b162acf394138f7f5eb811e4",
+        "repeatSha256": "27271b732276ca7ae09017751b17d1781b2dcd67b162acf394138f7f5eb811e4",
+        "byteIdentical": true
+      },
+      "finalHash": "41fbefcaebdd00f6cb31329b434f37e4d926dc9f39f725b31a1b68d93505a0cf",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 17.0,
+      "maxApiStepMs": 21,
+      "statusCounts": {
+        "applied": 2
+      }
+    },
+    {
+      "session": "05-guardrails",
+      "specifiedSteps": 3,
+      "submittedMessages": 3,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "27271b732276ca7ae09017751b17d1781b2dcd67b162acf394138f7f5eb811e4",
+        "repeatSha256": "27271b732276ca7ae09017751b17d1781b2dcd67b162acf394138f7f5eb811e4",
+        "byteIdentical": true
+      },
+      "finalHash": "41fbefcaebdd00f6cb31329b434f37e4d926dc9f39f725b31a1b68d93505a0cf",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 8,
+      "maxApiStepMs": 11,
+      "statusCounts": {
+        "rejected": 3
+      }
+    },
+    {
+      "session": "06-separate-cuts",
+      "specifiedSteps": 4,
+      "submittedMessages": 4,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "2b37be7d5e216435075173b9a8dde9807e19d3a5ce25461efd20de307a44b0cb",
+        "repeatSha256": "cf961e4388808ca12372344b307a258bf319735051d44333a9fbfbee1431a7de",
+        "byteIdentical": false,
+        "decodedMono16kCorrelation": 0.9999999039793696,
+        "differenceRms": 3.440230484250303e-05
+      },
+      "finalHash": "1d486e5b6b08d2811f20dfc96df202b1308eed82def820bc0ef044d1c6e8c728",
+      "outputVideoSeconds": 114.466667,
+      "outputLengthErrorFrames": 0.43999,
+      "medianApiStepMs": 15.0,
+      "maxApiStepMs": 16,
+      "statusCounts": {
+        "applied": 4
+      }
+    },
+    {
+      "session": "07-overlapping-speeds",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "883f7c5cabd0c17c8cd5deca7dc7aaacf3eaf5665d3c3643058950746d171225",
+        "repeatSha256": "883f7c5cabd0c17c8cd5deca7dc7aaacf3eaf5665d3c3643058950746d171225",
+        "byteIdentical": true
+      },
+      "finalHash": "41d75d9ff1dd40bf90e949d10a26e617b9584ffd6aff6e40117231a526db3014",
+      "outputVideoSeconds": 110,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 5.5,
+      "maxApiStepMs": 6,
+      "statusCounts": {
+        "applied": 2
+      }
+    },
+    {
+      "session": "08-source-overlay",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "3ed3f1b5bc66c095417cf80bd48bc0ae8ccd1b26d05b74399f0f2307c255731e",
+        "repeatSha256": "3ed3f1b5bc66c095417cf80bd48bc0ae8ccd1b26d05b74399f0f2307c255731e",
+        "byteIdentical": true
+      },
+      "finalHash": "75a23761707c877a4a02854301de4ebc6837ca6daeaa3aec7e8cb1468a247946",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 6.5,
+      "maxApiStepMs": 7,
+      "statusCounts": {
+        "applied": 2
+      }
+    },
+    {
+      "session": "09-question",
+      "specifiedSteps": 2,
+      "submittedMessages": 3,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "37a05e74644355671f43f647464156cee2da1e2966fb71b4db805725f62dad60",
+        "repeatSha256": "37a05e74644355671f43f647464156cee2da1e2966fb71b4db805725f62dad60",
+        "byteIdentical": true
+      },
+      "finalHash": "a219e5817f5fd7f1a6c51e4a94d218966a03e3d11651a61567be851cc623e526",
+      "outputVideoSeconds": 50,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 19,
+      "maxApiStepMs": 21,
+      "statusCounts": {
+        "applied": 2,
+        "needs_clarification": 1
+      }
+    },
+    {
+      "session": "10-ambiguity",
+      "specifiedSteps": 1,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "f3aac6d6bbf321d1256efaa4461d0b8f354711abd15916dfed28be6b087ec4cf",
+        "repeatSha256": "f3aac6d6bbf321d1256efaa4461d0b8f354711abd15916dfed28be6b087ec4cf",
+        "byteIdentical": true
+      },
+      "finalHash": "35f6a838e765c3a2950cc40b2ba5cd5a8f683963a15783acfc41dee0ada3a0a7",
+      "outputVideoSeconds": 115.533333,
+      "outputLengthErrorFrames": 0.04001,
+      "medianApiStepMs": 13.0,
+      "maxApiStepMs": 14,
+      "statusCounts": {
+        "applied": 1,
+        "needs_clarification": 1
+      }
+    },
+    {
+      "session": "11-redo-invalidation",
+      "specifiedSteps": 4,
+      "submittedMessages": 4,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "2dcc9e6260c42831166d5687a8988c17fe21768d40b3ee7e810df11733fc8ea0",
+        "repeatSha256": "2dcc9e6260c42831166d5687a8988c17fe21768d40b3ee7e810df11733fc8ea0",
+        "byteIdentical": true
+      },
+      "finalHash": "7170ec7d158a0178cb76b800c8b86a6ff75feb4c1e7f73812c256e7aa4766432",
+      "outputVideoSeconds": 110,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 10.5,
+      "maxApiStepMs": 15,
+      "statusCounts": {
+        "applied": 3,
+        "rejected": 1
+      }
+    },
+    {
+      "session": "12-automatic-captions",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "60e5528ba33943f36fb9d65ce67ebce1801071e6247e2d5c65712033eb74c7fc",
+        "repeatSha256": "60e5528ba33943f36fb9d65ce67ebce1801071e6247e2d5c65712033eb74c7fc",
+        "byteIdentical": true
+      },
+      "finalHash": "6146af3bc709d323823e8ab5969716782ddc3bc2bae317381852f02932058307",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 19.0,
+      "maxApiStepMs": 26,
+      "statusCounts": {
+        "applied": 2
+      }
+    },
+    {
+      "session": "13-overlapping-edits",
+      "specifiedSteps": 3,
+      "submittedMessages": 3,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "1d0953c7c0ff68f6cc11b7e850870bd96bce8a2307c17a2bfcb312faad6f9043",
+        "repeatSha256": "1d0953c7c0ff68f6cc11b7e850870bd96bce8a2307c17a2bfcb312faad6f9043",
+        "byteIdentical": true
+      },
+      "finalHash": "3fa530599b3c98cbc446cc7b6372fb283dfdb7bc5b242c7edd1df250abe19eb8",
+      "outputVideoSeconds": 100,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 13,
+      "maxApiStepMs": 13,
+      "statusCounts": {
+        "applied": 3
+      }
+    },
+    {
+      "session": "14-protected-pause",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "d0e11ce2982b40b73690116a1f54115f6403c714ab5493dc5eda0d275daf3b60",
+        "repeatSha256": "d0e11ce2982b40b73690116a1f54115f6403c714ab5493dc5eda0d275daf3b60",
+        "byteIdentical": true
+      },
+      "finalHash": "c2fd546a241356ac3ba854c68c1b962651ed5cbe8acb15728e28677c684cfc60",
+      "outputVideoSeconds": 47.933333,
+      "outputLengthErrorFrames": 0.035,
+      "medianApiStepMs": 25.0,
+      "maxApiStepMs": 30,
+      "statusCounts": {
+        "applied": 2
+      }
+    },
+    {
+      "session": "15-word-audio",
+      "specifiedSteps": 2,
+      "submittedMessages": 2,
+      "matchedSessions": 3,
+      "repeatMp4": {
+        "originalSha256": "9d5b18b558e092238779a54f9f4cbb45e6274702c3ac0e8e14f20b7115355981",
+        "repeatSha256": "9d5b18b558e092238779a54f9f4cbb45e6274702c3ac0e8e14f20b7115355981",
+        "byteIdentical": true
+      },
+      "finalHash": "553089f6a390e99636e1012f267f63b1f9229dc50ffd4dc677fd24bbdd66ec2d",
+      "outputVideoSeconds": 120,
+      "outputLengthErrorFrames": 0,
+      "medianApiStepMs": 18.0,
+      "maxApiStepMs": 18,
+      "statusCounts": {
+        "applied": 2
+      }
+    }
+  ],
+  "workedExample": {
+    "captionByStep": [
+      {
+        "step": 1,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          42.212,
+          43.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 120
+      },
+      {
+        "step": 2,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 90
+      },
+      {
+        "step": 3,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 86.17
+      },
+      {
+        "step": 4,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 71.17
+      },
+      {
+        "step": 5,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          42.212,
+          43.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 101.17
+      },
+      {
+        "step": 6,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FFFFFF",
+        "duration": 71.17
+      },
+      {
+        "step": 7,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FF0000",
+        "duration": 71.17
+      },
+      {
+        "step": 8,
+        "originalWords": [
+          "Welcome",
+          "to",
+          "the",
+          "channel."
+        ],
+        "source": [
+          42.211999999999996,
+          43.456
+        ],
+        "output": [
+          12.212,
+          13.456
+        ],
+        "color": "#FF0000",
+        "duration": 71.17
+      }
+    ],
+    "renderedCaption": {
+      "first": 184,
+      "last": 201,
+      "frameCount": 18,
+      "firstSeconds": 12.266666666666667,
+      "endExclusiveSeconds": 13.466666666666667
+    },
+    "acousticCheck": {
+      "method": "4 s source/output PCM correlation at zero lag after the 30 s cut; voice activity measured in 10 ms windows above -40 dBFS RMS.",
+      "window": {
+        "sourceStart": 41,
+        "renderedStart": 11,
+        "duration": 4
+      },
+      "firstVoice": 12.22,
+      "lastVoice": 13.44,
+      "captionVisible": [
+        12.266666666666667,
+        13.466666666666667
+      ],
+      "startDifferenceMs": 46.666666666666856,
+      "endDifferenceMs": 26.666666666667282,
+      "sourceOutputPcmCorrelation": 0.9999946814892611
+    }
+  },
+  "overlapFixture": {
+    "source": "Two separately rendered original CMU Flite stems physically overlap over a piano bed. Frame rate changes after 4 s.",
+    "overlapSeconds": 0.44320800000000016,
+    "voices": [
+      {
+        "label": "Host",
+        "voice": "slt",
+        "text": "Hello",
+        "start": 0.8,
+        "end": 1.3432080000000002
+      },
+      {
+        "label": "Guest",
+        "voice": "rms",
+        "text": "Welcome",
+        "start": 0.9,
+        "end": 1.3445
+      }
+    ],
+    "asr": {
+      "provider": "Xenova/whisper-base",
+      "observedTurns": [
+        {
+          "speaker": "Speaker 1",
+          "text": "Hello.",
+          "start": 1.04,
+          "end": 2.02
+        },
+        {
+          "speaker": "Speaker 1",
+          "text": "The camera is recording the new show in our studio.",
+          "start": 3.36,
+          "end": 6
+        }
+      ],
+      "words": 11,
+      "warnings": [
+        "Variable frame rate. Positions use original media timestamps.",
+        "Speaker attribution is unverified. A single anonymous label may include multiple or overlapping voices."
+      ]
+    },
+    "knownFault": {
+      "description": "Measured stems used as reference. Guest segment was deliberately assigned the Host word-level label.",
+      "warnings": [
+        "Variable frame rate. Positions use original media timestamps.",
+        "Speaker attribution is unverified. A single anonymous label may include multiple or overlapping voices.",
+        "Overlapping speakers detected. A cut may affect both voices.",
+        "Possible speaker-label mismatch between words and their segment. Review speaker-specific edits."
+      ]
+    },
+    "output": "overlap-export.mp4"
+  },
+  "additionalRenderObservation": {
+    "session": "06-separate-cuts",
+    "twoComparedMp4Sha256": [
+      "2b37be7d5e216435075173b9a8dde9807e19d3a5ce25461efd20de307a44b0cb",
+      "72beeb1874236f027fed542e0ab89732626ec68a9a090cd84bab02001ec7ad3b"
+    ],
+    "decodedVideoFrameHashMatched": true,
+    "decodedMono16kSamples": 1831936,
+    "decodedMono16kWaveformCorrelation": 0.9999999852571084,
+    "note": "An additional valid render encoded slightly different AAC samples; audio and video lengths were unchanged."
+  }
+}

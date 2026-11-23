@@ -141,9 +141,9 @@
     },
     {
       "case": "20 pause cuts in bundled keynote narration",
-      "timelineSeconds": 53.65,
-      "videoSeconds": 53.666667,
-      "lengthErrorFrames": 0.40000799999995706,
+      "timelineSeconds": 53.983,
+      "videoSeconds": 54,
+      "lengthErrorFrames": 0.4080000000000723,
       "joins": [
         {
           "sourceCut": {

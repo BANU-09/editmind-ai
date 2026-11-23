@@ -1,0 +1,57 @@
+{
+  "site": "https://editmind-ai-banu09.vercel.app",
+  "checked_utc": "2026-11-23T19:26:47.805319+00:00",
+  "homepage_status": 200,
+  "health_status": 200,
+  "ready_status": 200,
+  "openapi": "3.1.0",
+  "service_paths": 17,
+  "worker_revision": "4b328eb745deff3b",
+  "fixture": "garden-gate.mp4 (synthetic English speech)",
+  "transcript": "The blue bicycle is beside the garden gate. We will ride to the station on Friday morning.",
+  "provider": "Xenova/whisper-base",
+  "steps": [
+    {
+      "say": "Cut the first 1 second",
+      "status": "applied",
+      "elapsed_ms": 6392,
+      "duration_s": 4.207,
+      "timeline_hash": "e063da69bc9094808acb1d3daeb120d8f4947e8c53571cc6b0be15fb5ee0bd7c"
+    },
+    {
+      "say": "Undo",
+      "status": "applied",
+      "elapsed_ms": 1474,
+      "duration_s": 5.407,
+      "timeline_hash": "2d4215a178fec561e77e7d57cd87a2490b39bc72afd7d76efb17ae57e05ae7ac"
+    },
+    {
+      "say": "Make it shorter",
+      "status": "needs_clarification",
+      "elapsed_ms": 613,
+      "duration_s": 5.407,
+      "timeline_hash": "2d4215a178fec561e77e7d57cd87a2490b39bc72afd7d76efb17ae57e05ae7ac"
+    },
+    {
+      "say": "Cancel",
+      "status": "applied",
+      "elapsed_ms": 661,
+      "duration_s": 5.407,
+      "timeline_hash": "2d4215a178fec561e77e7d57cd87a2490b39bc72afd7d76efb17ae57e05ae7ac"
+    }
+  ],
+  "step_timing": "Browser submit through visible completion, includes session setup on first request and timeline download when an edit changes state.",
+  "downloaded_mp4_streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "duration": "5.416667"
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "duration": "5.407000"
+    }
+  ],
+  "additional_observation": "A thumbnail request failed during initial project loading. Transcription, editing and the MP4 download completed."
+}

@@ -4,6 +4,13 @@ EditMind turns instructions about a video into reversible timeline edits. Upload
 
 [Open EditMind](https://editmind-ai-banu09.vercel.app/) · [Assessment report](REPORT.md) · [API guide](docs/api.md) · [Timeline rules](docs/timeline.md)
 
+## Try an edit
+
+1. Start editing and upload a spoken MP4. Wait for the transcript, then play a sentence to check the source audio.
+2. Select **Editing session** and enter `Cut the first 10 seconds`. Enter `Undo` to restore the source section.
+3. Try `Add caption "On air" at 0:20 for 3 seconds` on a recording longer than 23 seconds. The caption follows its source interval when earlier material moves.
+4. Select **Export MP4**, choose a resolution and render. Download the finished MP4. To obtain the timeline, OTIO and provenance manifest together, run the CLI below.
+
 ## Run locally
 
 From the repository root, start the web app, SQLite-backed job service and S3-compatible object store with Docker Compose. The first speech transcription downloads Whisper weights.
@@ -46,3 +53,7 @@ HTTP failures have an `error` object containing `code`, `message`, `retryable` a
 | INTERNAL_ERROR | The service could not complete the request. |
 
 Third-party software, model and media credits are in [SOURCES.md](SOURCES.md). Development assistance is recorded in [AI_USE.md](AI_USE.md).
+
+[Editing and media CI](https://github.com/BANU-09/editmind-ai/actions/workflows/checks.yml) · [Persistent S3 check](https://github.com/BANU-09/editmind-ai/actions/workflows/compose.yml)
+
+[Download the 15 worked sessions](https://github.com/BANU-09/editmind-ai/releases/tag/assessment-2-verified) to inspect a source clip, rendered MP4, step responses, timeline, OpenTimelineIO export and provenance manifest side by side.

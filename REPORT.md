@@ -15,3 +15,30 @@ The assessment entry point is **Editing session** in the workspace. It shares th
 | Integration | The HTTP test exercises guest isolation, concurrent retry keys, edit revision conflicts, MP4 delivery, source preservation, manifests and HMAC callback verification. It uses a controlled STT provider to isolate HTTP behavior. The separate media pipeline test exercises CPU speech recognition on spoken inputs. [HTTP test](server/sessionApi.test.ts) · [Media pipeline](server/pipeline_e2e.test.ts) |
 
 The repository is public at the candidate's request. The production service can cold-start after inactivity. The assessment tests exercise published cases and synthetic fixtures. Reviewers can run their own videos and instruction sequences using the same runner.
+
+## Replaying a two-speaker upload
+
+The public studio fixture is 120 seconds long. Fifteen independent sessions supplied 43 instructions and three clarification answers. All fifteen produced an MP4. Three fresh runs per session matched on status, response code, duration and timeline hash at every step over the same transcribed source. The three deliberately ambiguous inputs each asked for clarification. Four invalid instructions were rejected.
+
+In the eight-step session, Whisper identified the four source words at 42.212–43.456 s. Cutting the first 30 seconds moved their caption to 12.212–13.456 s. Restoring the intro and undoing the restoration moved it back and forth on the same words. In the exported MP4, the first and last visible red frames were within one 15 fps frame of the decoded speech boundaries. [Reproduce the session](testpack/sessions/01-editor-session.yaml) · [Check the pixels and audio](scripts/check-caption-audio.mjs)
+
+The official OpenTimelineIO reader opened all 15 final exports and round-tripped 380 clips referencing the included source. An extra repeat-encode check produced different AAC bytes in one output. Its decoded video matched and its audio had the same sample count and a correlation of 0.999999985. [Session measurements](evidence/public-test-pack.json) · [OTIO verification](evidence/otio-validation.json) · [Download all 15 rendered examples](https://github.com/BANU-09/editmind-ai/releases/tag/assessment-2-verified)
+
+The overlapping-speech test mixed two synthesized speakers for 0.443 s over a music bed in a variable-frame-rate source. Whisper returned a single anonymous speaker label and the editor warned that voices could overlap. An intentionally inconsistent word/turn label in the reference timeline triggered an additional warning. Automatic speaker identity remains uncertain on overlapping uploads. [Run the combined fixture](scripts/check-speaker-overlap.mjs)
+
+## Deployment and storage
+
+The Compose integration test saved the MP4 and manifest to SeaweedFS, recreated both containers, and downloaded the same bytes by job ID. The tested MP4 was 352,620 bytes with SHA-256 `b77483f0901133bb41d5d992c8553c65f4509428fea91087636692c2a660aa43`. The hosted app uses a persistent Vercel Drive. Both CPU speech recognition and the structured session engine ran without metered model API calls. Infrastructure costs depend on the operator's hosting rates. [Initial storage check](evidence/compose-roundtrip.json) · [After restart](evidence/compose-restart.json)
+
+## Deployed instruction latency
+
+Worker `4b328eb745deff3b` served 12 instructions on each of two previously transcribed uploads, repeated on three fresh sessions per upload. The client clock ran from sending the HTTP step through receiving its complete response, using the discovered worker as the app and runner do. Transcription, session creation and rendering are separate operations. Each of the 72 decisions matched its expected status and each step produced the same hash across the three runs.
+
+| Upload | Words | Responses | Client median | Client slowest | Server median | Server slowest |
+|---|---:|---:|---:|---:|---:|---:|
+| 5 minutes, 320 × 180 at 15 fps | 247 | 36 | 0.631 s | 0.723 s | 0.005 s | 0.013 s |
+| 60 minutes, 240 × 136 at 2 fps | 7,625 | 36 | 0.711 s | 0.821 s | 0.090 s | 0.231 s |
+
+An earlier deployed build took 3.467 s for one hour-long edit. The final build stores the immutable original once and compresses large session updates. Raw measurements retain both runs. These timings describe the structured editing API. Browser interaction and the conversational model incur additional work. [Final timings](evidence/latency.json) · [Earlier hour-long outlier](evidence/latency-bca792e7.json)
+
+On the deployed browser interface, the same 12 conversational prompts on a 90-second keynote passed again. Median conversational response time was 3.025 seconds and the slowest was 8.981 seconds. A separate fresh upload produced the expected garden-gate transcript. The browser applied a cut, undid it, requested clarification, accepted cancellation and downloaded an H.264/AAC MP4. Its first structured edit took 6.392 seconds including session setup and visible completion. A thumbnail request failed during project loading. [All 12 prompt times](evidence/conversation-prompts.json) · [Browser upload and export checks](evidence/live-browser.json)

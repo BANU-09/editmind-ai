@@ -1,0 +1,52 @@
+{
+  "source": "Two separately rendered original CMU Flite stems physically overlap over a piano bed. Frame rate changes after 4 s.",
+  "overlapSeconds": 0.44320800000000016,
+  "voices": [
+    {
+      "label": "Host",
+      "voice": "slt",
+      "text": "Hello",
+      "start": 0.8,
+      "end": 1.3432080000000002
+    },
+    {
+      "label": "Guest",
+      "voice": "rms",
+      "text": "Welcome",
+      "start": 0.9,
+      "end": 1.3445
+    }
+  ],
+  "asr": {
+    "provider": "Xenova/whisper-base",
+    "observedTurns": [
+      {
+        "speaker": "Speaker 1",
+        "text": "Hello.",
+        "start": 1.04,
+        "end": 2.02
+      },
+      {
+        "speaker": "Speaker 1",
+        "text": "The camera is recording the new show in our studio.",
+        "start": 3.36,
+        "end": 6
+      }
+    ],
+    "words": 11,
+    "warnings": [
+      "Variable frame rate. Positions use original media timestamps.",
+      "Speaker attribution is unverified. A single anonymous label may include multiple or overlapping voices."
+    ]
+  },
+  "knownFault": {
+    "description": "Measured stems used as reference. Guest segment was deliberately assigned the Host word-level label.",
+    "warnings": [
+      "Variable frame rate. Positions use original media timestamps.",
+      "Speaker attribution is unverified. A single anonymous label may include multiple or overlapping voices.",
+      "Overlapping speakers detected. A cut may affect both voices.",
+      "Possible speaker-label mismatch between words and their segment. Review speaker-specific edits."
+    ]
+  },
+  "output": "overlap-export.mp4"
+}

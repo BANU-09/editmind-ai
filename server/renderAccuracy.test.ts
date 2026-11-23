@@ -259,9 +259,9 @@ test(
             ],
           });
           const words = indexed.transcript.flatMap((t) => t.words);
-          assert.equal(words[0].end, 28.091);
-          assert.equal(words[1].start, 42.212);
-          assert.equal(words[1].end, 43.456);
+          assert.equal(Math.round(words[0].end * 1000), 28091);
+          assert.equal(Math.round(words[1].start * 1000), 42212);
+          assert.equal(Math.round(words[1].end * 1000), 43456);
           assert.equal(words[1].timingAccuracy, 'aligned');
         },
       );

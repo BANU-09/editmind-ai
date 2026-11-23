@@ -1,0 +1,156 @@
+{
+  "opentimelineio": "0.18.1",
+  "jsonschema": "4.26.0",
+  "sessions": [
+    {
+      "session": "01-editor-session",
+      "duration_s": 71.17,
+      "tracks": 2,
+      "clips": 22,
+      "timeline_hash": "773978d292bd70e9c8583797a52351f449a9f8f79d13e9d28f2d71cb3bc1bd7f",
+      "timeline_file_sha256": "2ce01ab26ae88ea95de4eb5023d17cb6aeecb7750973c6711be181b5575fdfc1",
+      "otio_file_sha256": "f624a269280f251f2f9e1b4ff14e8dd5176b3751e1518630297c2828135fc51e",
+      "result": "passed"
+    },
+    {
+      "session": "02-history",
+      "duration_s": 110,
+      "tracks": 2,
+      "clips": 22,
+      "timeline_hash": "fa58a23ce9667d401786d45ec9be7f98386470a8bbd0b90bb4f002b31fd48bba",
+      "timeline_file_sha256": "a4f0d739791f9bc603fd837ff5249746c343a987f3b0997cb816adfd55a697b1",
+      "otio_file_sha256": "37056a747156c096f05dee02121e6c051b42f94f8acf2af9aab67af6e4895de3",
+      "result": "passed"
+    },
+    {
+      "session": "03-source-text",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "5daf128eb9b0eebc478a71fee42a2ec48107fbbf015c8184b1ca3886e505bf12",
+      "timeline_file_sha256": "37c50a4c0f6dc3a68f9df7101b69ec2b1b12ee256e20579bd571f8187d68ea5d",
+      "otio_file_sha256": "4fb9602a9ad8c9b1625e13db81d159100c099868e1ea3b75df17deff0a44bc9f",
+      "result": "passed"
+    },
+    {
+      "session": "04-compound",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "41fbefcaebdd00f6cb31329b434f37e4d926dc9f39f725b31a1b68d93505a0cf",
+      "timeline_file_sha256": "534da3b122cc8de9747be7ad8af52348d096b5352acac607092c927c8160c455",
+      "otio_file_sha256": "3866824c288952f064edfefac00237ed78edf97e9e55b3ebeb404c2d360c972f",
+      "result": "passed"
+    },
+    {
+      "session": "05-guardrails",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "41fbefcaebdd00f6cb31329b434f37e4d926dc9f39f725b31a1b68d93505a0cf",
+      "timeline_file_sha256": "534da3b122cc8de9747be7ad8af52348d096b5352acac607092c927c8160c455",
+      "otio_file_sha256": "3866824c288952f064edfefac00237ed78edf97e9e55b3ebeb404c2d360c972f",
+      "result": "passed"
+    },
+    {
+      "session": "06-separate-cuts",
+      "duration_s": 114.496,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "1d486e5b6b08d2811f20dfc96df202b1308eed82def820bc0ef044d1c6e8c728",
+      "timeline_file_sha256": "c8b89c6b680942efa15c3b6c018d1199b9950ef83f516e0e333d0b7b9956dd59",
+      "otio_file_sha256": "31ed07e31ad0973c87092c060b0a53cf7e6a998472033e21d4f62689723b4bff",
+      "result": "passed"
+    },
+    {
+      "session": "07-overlapping-speeds",
+      "duration_s": 110,
+      "tracks": 2,
+      "clips": 32,
+      "timeline_hash": "41d75d9ff1dd40bf90e949d10a26e617b9584ffd6aff6e40117231a526db3014",
+      "timeline_file_sha256": "e708f3c2fc3700258d7b7ef30d7d5839acdcffd5b86384c6339dbb705da349cd",
+      "otio_file_sha256": "269722d63e2e4bcc8ba7481cd29c1aefead0a6ca98c71c428ac699fd290ee297",
+      "result": "passed"
+    },
+    {
+      "session": "08-source-overlay",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 28,
+      "timeline_hash": "75a23761707c877a4a02854301de4ebc6837ca6daeaa3aec7e8cb1468a247946",
+      "timeline_file_sha256": "7913a9c6995784348678a0bec1f831028b6a67167639b6890d0d971714aadc17",
+      "otio_file_sha256": "6895686e92625f46e9aae433486693c03f089dfe800c1026dd1b34fede72c574",
+      "result": "passed"
+    },
+    {
+      "session": "09-question",
+      "duration_s": 50,
+      "tracks": 2,
+      "clips": 12,
+      "timeline_hash": "a219e5817f5fd7f1a6c51e4a94d218966a03e3d11651a61567be851cc623e526",
+      "timeline_file_sha256": "126c7bab85f9f7c0ffc20e1935543ec13c5119fdaec400d440c815c4f91c81a0",
+      "otio_file_sha256": "648aa73b75b9a9ec32d2b2d59bf321ae43274eb19acf7b8acb18ace5f8fae54e",
+      "result": "passed"
+    },
+    {
+      "session": "10-ambiguity",
+      "duration_s": 115.536,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "35f6a838e765c3a2950cc40b2ba5cd5a8f683963a15783acfc41dee0ada3a0a7",
+      "timeline_file_sha256": "b7fab56babef9c70ba85f5b5726dc5352aa63a19c1502ec2404040661a49d7da",
+      "otio_file_sha256": "01a20db2cd78ba7d01d112947756a7df12be656da89cf0a623a7ebd86ef85039",
+      "result": "passed"
+    },
+    {
+      "session": "11-redo-invalidation",
+      "duration_s": 110,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "7170ec7d158a0178cb76b800c8b86a6ff75feb4c1e7f73812c256e7aa4766432",
+      "timeline_file_sha256": "1881e56300226791a7ea95cd62fdb0513eb6df6e3b25f0c09cdb5ff5949299bb",
+      "otio_file_sha256": "4333ce442da92cea7b79db03a3e187df95004266346eb6409f1703a2dffb9b5d",
+      "result": "passed"
+    },
+    {
+      "session": "12-automatic-captions",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "6146af3bc709d323823e8ab5969716782ddc3bc2bae317381852f02932058307",
+      "timeline_file_sha256": "9394266c611bea40cac0d63b1cf3c6f2c101b3aa3f22fe400f33648f2173ac01",
+      "otio_file_sha256": "89d4a91d5ed88658d4684514a364e40342af0b9dde9262964d8f8753ee3db734",
+      "result": "passed"
+    },
+    {
+      "session": "13-overlapping-edits",
+      "duration_s": 100,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "3fa530599b3c98cbc446cc7b6372fb283dfdb7bc5b242c7edd1df250abe19eb8",
+      "timeline_file_sha256": "c783680deafaf73aee12c555d87ba5d76ff62218ad57a9ae86324983936aaa99",
+      "otio_file_sha256": "d66eb5517cb2cfdb0a107538c863ef84da90725add7f65e18e30898e3b78fa26",
+      "result": "passed"
+    },
+    {
+      "session": "14-protected-pause",
+      "duration_s": 47.931,
+      "tracks": 2,
+      "clips": 48,
+      "timeline_hash": "c2fd546a241356ac3ba854c68c1b962651ed5cbe8acb15728e28677c684cfc60",
+      "timeline_file_sha256": "c65799f1439c55f6a87126757ec9e61cd7f70a50ed071a0d2d4029e1c41882ad",
+      "otio_file_sha256": "2e21eab48688a7607212d5640c98b36fba62bf490945aeff5fbcb41729802272",
+      "result": "passed"
+    },
+    {
+      "session": "15-word-audio",
+      "duration_s": 120,
+      "tracks": 2,
+      "clips": 24,
+      "timeline_hash": "553089f6a390e99636e1012f267f63b1f9229dc50ffd4dc677fd24bbdd66ec2d",
+      "timeline_file_sha256": "2c146c79391e54264ba640086c153d88791bd6beceadc64f535659e3a46d407d",
+      "otio_file_sha256": "f1cbd0e5824ba6527a6caaf32df2f75a22b53e353a5921e9864c999ecd5c4a73",
+      "result": "passed"
+    }
+  ]
+}

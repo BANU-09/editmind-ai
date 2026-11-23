@@ -1,0 +1,104 @@
+{
+  "surface": "Deployed browser AI conversation on the 90-second keynote",
+  "measure": "Client click through response body, one observation per prompt; project setup and following autosave excluded.",
+  "median_ms": 3024.5,
+  "slowest_ms": 8981,
+  "prompts": [
+    {
+      "prompt": "Hi",
+      "elapsed_ms": 8981,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "What can you do?",
+      "elapsed_ms": 2270,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Summarize this video.",
+      "elapsed_ms": 7354,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Explain what the speaker is discussing.",
+      "elapsed_ms": 4648,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Find the section where pricing is mentioned.",
+      "elapsed_ms": 3540,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Remove the second mention of pricing.",
+      "elapsed_ms": 1959,
+      "operations": [
+        "REMOVE_WORD"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Also remove the pause after that.",
+      "elapsed_ms": 2509,
+      "operations": [
+        "REMOVE_RANGE"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "What did I ask you to remove earlier?",
+      "elapsed_ms": 4234,
+      "operations": [],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Remove unnecessary pauses.",
+      "elapsed_ms": 2505,
+      "operations": [
+        "REMOVE_SILENCES"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Make the video shorter but preserve important content.",
+      "elapsed_ms": 7047,
+      "operations": [
+        "KEEP_ONLY_RANGE"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Change captions to yellow.",
+      "elapsed_ms": 1535,
+      "operations": [
+        "STYLE_CAPTIONS"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    },
+    {
+      "prompt": "Remove the introduction.",
+      "elapsed_ms": 2280,
+      "operations": [
+        "REMOVE_RANGE"
+      ],
+      "provider": "Qwen2.5-1.5B-Instruct",
+      "checks_passed": true
+    }
+  ]
+}
