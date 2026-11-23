@@ -1,0 +1,70 @@
+{
+  "site": "https://editmind-ai-banu09.vercel.app",
+  "app_commit": "cca9691ab8789afab538c719639da48a92714a17",
+  "worker_revision": "24e949bcc3c75004",
+  "scope": "Chromium upload of a synthetic narrated video. The fallback was exercised by returning HTTP 415 for its stream within the test browser only. open_ms is elapsed from starting Chromium to opening the upload dialog; the preceding worker sleep state is unknown.",
+  "health": {
+    "site": "https://editmind-ai-banu09.vercel.app",
+    "checked_utc": "2026-11-23T20:17:15.168339+00:00",
+    "homepage_status": 200,
+    "health_status": 200,
+    "ready_status": 200,
+    "openapi": "3.1.0",
+    "service_paths": 17,
+    "worker_revision": "24e949bcc3c75004"
+  },
+  "before": {
+    "date": "2026-11-23T20:11:45.472Z",
+    "open_ms": 10641,
+    "poster": {
+      "width": 640,
+      "height": 360
+    },
+    "requests": [
+      {
+        "type": "Image",
+        "status": 200,
+        "mime": "image/jpeg",
+        "host": "media-worker"
+      },
+      {
+        "type": "Image",
+        "failed": "net::ERR_FAILED",
+        "cors": "MissingAllowOriginHeader",
+        "host": "media-worker"
+      },
+      {
+        "type": "Image",
+        "status": 200,
+        "mime": "image/jpeg",
+        "host": "media-worker"
+      }
+    ]
+  },
+  "after": {
+    "date": "2026-11-23T20:21:28.992Z",
+    "open_ms": 3872,
+    "poster": {
+      "width": 640,
+      "height": 360
+    },
+    "fallback": {
+      "width": 640,
+      "height": 360
+    },
+    "requests": [
+      {
+        "type": "Image",
+        "status": 200,
+        "mime": "image/jpeg",
+        "host": "media-worker"
+      },
+      {
+        "type": "Image",
+        "status": 200,
+        "mime": "image/jpeg",
+        "host": "media-worker"
+      }
+    ]
+  }
+}

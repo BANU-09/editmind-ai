@@ -40,16 +40,18 @@ For transcription alone, the five-minute upload reported 34.298 seconds of STT t
 
 ## Deployed instruction latency
 
-Worker `4b328eb745deff3b` served 12 instructions on each of two previously transcribed uploads, repeated on three fresh sessions per upload. The client clock ran from sending the HTTP step through receiving its complete response, using the discovered worker as the app and runner do. Transcription, session creation and rendering are separate operations. Each of the 72 decisions matched its expected status and each step produced the same hash across the three runs.
+Worker `24e949bcc3c75004` served 12 instructions on each of two previously transcribed uploads, repeated on three fresh sessions per upload. The client clock ran from sending the HTTP step through receiving its complete response, using the worker discovered by the app. The benchmark excludes transcription, session creation and rendering. All 72 decisions matched their expected status. Each step produced the same timeline hash across its three runs.
 
 | Upload | Words | Responses | Client median | Client slowest | Server median | Server slowest |
 |---|---:|---:|---:|---:|---:|---:|
-| 5 minutes, 320 × 180 at 15 fps | 247 | 36 | 0.631 s | 0.723 s | 0.005 s | 0.013 s |
-| 60 minutes, 240 × 136 at 2 fps | 7,625 | 36 | 0.711 s | 0.821 s | 0.090 s | 0.231 s |
+| 5 minutes, 320 × 180 at 15 fps | 247 | 36 | 0.631 s | 0.718 s | 0.004 s | 0.010 s |
+| 60 minutes, 240 × 136 at 2 fps | 7,625 | 36 | 0.711 s | 0.825 s | 0.094 s | 0.235 s |
 
-An earlier deployed build took 3.467 s for one hour-long edit. The final build stores the immutable original once and compresses large session updates. Raw measurements retain both runs. These timings describe the structured editing API. Browser interaction and the conversational model incur additional work. [Final timings](evidence/latency.json) · [Earlier hour-long outlier](evidence/latency-bca792e7.json)
+An earlier deployed build took 3.467 s for one hour-long edit. The current build stores the immutable original once and compresses large session updates. Browser interaction and the conversational model incur additional work. [Current API timings](evidence/review-latency.json) · [Previous 72-step measurement](evidence/latency.json) · [Earlier hour-long outlier](evidence/latency-bca792e7.json)
 
-On the deployed browser interface, the same 12 conversational prompts on a 90-second keynote passed again. Median conversational response time was 3.025 seconds and the slowest was 8.981 seconds. A separate fresh upload produced the expected garden-gate transcript. The browser applied a cut, undid it, requested clarification, accepted cancellation and downloaded an H.264/AAC MP4. Its first structured edit took 6.392 seconds including session setup and visible completion. A thumbnail request failed during project loading. [All 12 prompt times](evidence/conversation-prompts.json) · [Browser upload and export checks](evidence/live-browser.json)
+In the earlier browser run, all 12 conversational prompts on a 90-second keynote passed. Median conversational response time was 3.025 seconds and the slowest was 8.981 seconds. A fresh upload produced the expected garden-gate transcript. The browser applied a cut, undid it, requested clarification, accepted cancellation and downloaded an H.264/AAC MP4. Its first structured edit took 6.392 seconds including session setup and visible completion. That run also exposed a failed thumbnail request. [All 12 conversational prompt times](evidence/conversation-prompts.json) · [Browser upload and export checks](evidence/live-browser.json)
+
+After the thumbnail fix, a fresh Chromium process opened the deployed upload dialog in 3.872 seconds. We uploaded the narrated clip and verified that its 640 × 360 JPEG decoded in normal playback and in the fallback shown when the browser cannot play the stream. Both observed thumbnail requests returned HTTP 200. The worker’s idle state before the check was unknown. [Before-and-after browser trace and health checks](evidence/thumbnail-verification.json)
 
 ## Remaining engineering work
 
