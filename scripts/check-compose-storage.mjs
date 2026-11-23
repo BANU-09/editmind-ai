@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash, randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {setTimeout as wait} from 'node:timers/promises';
@@ -14,6 +14,7 @@ const dir = await mkdtemp(path.join(os.tmpdir(),'editmind-object-check-'));
 const source = path.join(dir,'source.mp4');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const sdk = new S3Client({region:process.env.S3_REGION,endpoint:process.env.S3_ENDPOINT,forcePathStyle:true});
+const [mode,stateFile]=process.argv.slice(2);
 async function json(method, route, body) {
   const result = await fetch(base + route, {
     method, headers:{...headers,'Content-Type':'application/json','Idempotency-Key':randomUUID()},
@@ -44,6 +45,19 @@ async function readIndependentObject(key) {
 try {
   const ready=await json('GET','/ready');
   assert.equal(ready.storage,'s3');
+  if(mode==='--verify-restart') {
+    const saved=JSON.parse(await readFile(stateFile,'utf8'));
+    headers['x-guest-id']=saved.guest;
+    const job=await finish(saved.job);
+    const mp4=await fetchArtifact(job.result_links.download);
+    const independent=await readIndependentObject('results/'+saved.job+'/edited.mp4');
+    const manifest=await readIndependentObject('results/'+saved.job+'/manifest.json');
+    assert.equal(sha(mp4),saved.mp4);
+    assert.equal(sha(independent),saved.mp4);
+    assert.equal(sha(manifest),saved.manifest);
+    console.log(JSON.stringify({checked_at:new Date().toISOString(),restart_verified:true,
+      job_status:job.status,mp4_sha256:sha(mp4),manifest_sha256:sha(manifest)}));
+  } else {
   execFileSync('ffmpeg',['-nostdin','-v','error','-f','lavfi','-i','testsrc2=size=176x144:rate=12','-t','3','-c:v','libx264','-threads','1','-pix_fmt','yuv420p',source]);
   const bytes=await readFile(source);
   const form=new FormData();form.append('video',new Blob([bytes],{type:'video/mp4'}),'source.mp4');
@@ -66,10 +80,12 @@ try {
   const manifest=JSON.parse(httpManifest);
   assert.equal(manifest.settings.storage,'s3');
   assert.match(httpVideo.subarray(0,48).toString('latin1'),/ftyp/);
+  if(mode==='--save-restart') await writeFile(stateFile,JSON.stringify({guest:headers['x-guest-id'],job:job.job_id,mp4:sha(httpVideo),manifest:sha(s3Manifest)}),{mode:0o600});
   console.log(JSON.stringify({checked_at:new Date().toISOString(),result:'passed',storage:ready.storage,
     input:{kind:'generated silent video',seconds:3,sha256:sha(bytes),job_status:input.status},
     render:{job_status:job.status,duration_s:step.duration_s,bytes:httpVideo.length,http_sha256:sha(httpVideo),s3_sha256:sha(s3Video)},
     manifest:{api_equals_s3:true,sha256:sha(s3Manifest),storage:manifest.settings.storage},service_version:manifest.versions.service},null,2));
+  }
 } finally {
   sdk.destroy();
   await rm(dir,{recursive:true,force:true});

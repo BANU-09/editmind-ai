@@ -211,7 +211,7 @@ export function installSessionApi(app:Express, deps:{auth:(req:Request)=>Princip
   router.get('/jobs/:id/download',async(req,res,next)=>{ try{
     const j=ownedJob(req.params.id,res.locals.owner);if(j.status!=='succeeded'||j.kind!=='export')fail(409,'JOB_PENDING');
     res.attachment('edited.mp4');res.type('video/mp4');
-    if(objectStore()==='s3'){
+    if(objectStore()==='s3' && j.manifest_json && JSON.parse(j.manifest_json).settings.storage==='s3'){
       const obj=await getObject('results/'+j.id+'/edited.mp4');
       if(obj.size!=null)res.set('Content-Length',String(obj.size));
       await pipeline(obj.stream,res);

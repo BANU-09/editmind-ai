@@ -52,6 +52,11 @@ def bench(base, path, label, repeats):
     private = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     with requests.Session() as client:
         client.headers.update({"x-guest-id": private["guest"]})
+        inspect = client.get(base + "/projects/" + private["pid"], timeout=90)
+        inspect.raise_for_status()
+        analysis = inspect.json()["project"]["analysis"]
+        source_duration = analysis["durationSec"]
+        word_count = sum(len(s.get("words", [])) for s in analysis["transcript"])
         runs = []
         for _ in range(repeats):
             new, setup_ms = post(client, base + "/projects/" + private["pid"] + "/sessions", {})
@@ -65,7 +70,9 @@ def bench(base, path, label, repeats):
             runs.append({"setup_ms_excluded": setup_ms, "steps": rows})
     times = [item["elapsed_ms"] for run in runs for item in run["steps"]]
     signatures = [[(item["status"], item["timeline_hash"]) for item in run["steps"]] for run in runs]
-    return {"label": label, "source_duration_s": new["duration_s"], "runs": runs, "step_count": len(times),
+    return {"label": label, "source_duration_s": source_duration, "word_count": word_count,
+            "width": analysis.get("width"), "height": analysis.get("height"), "fps": analysis.get("fps"),
+            "initial_timeline_duration_s": new["duration_s"], "runs": runs, "step_count": len(times),
             "median_ms": round(median(times), 2), "slowest_ms": max(times), "all_under_3s": max(times) < 3000,
             "all_statuses_expected": all(row["status"] == row["expected_status"] for run in runs for row in run["steps"]),
             "identical_across_runs": all(sig == signatures[0] for sig in signatures)}
@@ -74,6 +81,8 @@ def bench(base, path, label, repeats):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True, help="Origin serving /api/v1")
+    parser.add_argument("--connect-via", choices=["public-gateway", "discovered-worker"],
+                        default="public-gateway", help="Resolve the deployed worker once or follow the public redirect on every request")
     parser.add_argument("--project", action="append", required=True, help="LABEL=private fixture credential path")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path, required=True)
@@ -83,13 +92,21 @@ def main():
         parser.error("Supply an origin without a path or credentials")
     if args.repeats < 1:
         parser.error("At least one run is required")
+    public_origin = args.base_url.rstrip("/")
+    discovery = requests.get(public_origin + "/api/v1/endpoint", timeout=120)
+    discovery.raise_for_status()
+    worker_origin = discovery.json()["origin"].rstrip("/")
+    service_origin = worker_origin if args.connect_via == "discovered-worker" else public_origin
+    health = requests.get(worker_origin + "/api/health", timeout=120)
+    health.raise_for_status()
     report = {"schema_version": 1, "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "connection": args.connect_via, "worker_revision": health.json().get("mediaRevision"),
               "base_origin": args.base_url.rstrip("/"), "measurement": "Client wall clock over a reused HTTP connection; complete response body included. Session setup, transcription and render excluded.",
               "projects": []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     for spec in args.project:
         label, private_path = spec.split("=", 1)
-        measured = bench(args.base_url.rstrip("/") + "/api/v1", private_path, label, args.repeats)
+        measured = bench(service_origin + "/api/v1", private_path, label, args.repeats)
         report["projects"].append(measured)
         temporary = args.output.with_suffix(".tmp")
         temporary.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

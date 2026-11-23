@@ -230,9 +230,14 @@ export function snapCut(range: Span, analysis: MediaAnalysis): Span {
   // boundaries; use an adjacent silence edge only within 80 ms and with no
   // intervening timed speech. A full-source guard runs after snapping.
   const words = analysis.transcript.flatMap((s) => s.words);
+  // Recognizers can stretch the last spoken word across a multi-second
+  // pause. An edge already in measured silence needs no word adjustment.
+  const silent = (t: number) => analysis.silences.some((g) => g.start <= t && t <= g.end);
+  const startSilent = silent(start),
+    endSilent = silent(end);
   for (const w of words) {
-    if (w.start + 0.002 < start && w.end - 0.002 > start) start = Math.min(start, w.start);
-    if (w.start + 0.002 < end && w.end - 0.002 > end) end = Math.max(end, w.end);
+    if (!startSilent && w.start + 0.002 < start && w.end - 0.002 > start) start = Math.min(start, w.start);
+    if (!endSilent && w.start + 0.002 < end && w.end - 0.002 > end) end = Math.max(end, w.end);
   }
   const edges = analysis.silences.flatMap((s) => [s.start, s.end]);
   const closest = (t: number, side: number) => {
@@ -246,7 +251,10 @@ export function snapCut(range: Span, analysis: MediaAnalysis): Span {
       .sort((a, b) => Math.abs(a - t) - Math.abs(b - t))[0];
     return edge ?? t;
   };
-  return { start: Math.max(0, closest(start, -1)), end: Math.min(analysis.durationSec, closest(end, 1)) };
+  return {
+    start: startSilent ? range.start : Math.max(0, closest(start, -1)),
+    end: endSilent ? range.end : Math.min(analysis.durationSec, closest(end, 1)),
+  };
 }
 export function availableRanges(state: ProjectState) {
   return state.segments.map((s) => ({ start: s.sourceStart, end: s.sourceEnd }));

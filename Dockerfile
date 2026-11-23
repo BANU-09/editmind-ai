@@ -2,13 +2,14 @@ FROM node:24-bookworm-slim AS dependencies
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates python3 make g++ fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci --no-audit --no-fund
+# The CPU runtime is bundled in the npm package. This service uses CPU Whisper.
+RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci --no-audit --no-fund && npm cache clean --force
 
 FROM dependencies AS runtime
 COPY . .
 RUN npm run build
 ENV NODE_ENV=production PORT=3000 STORAGE_DIR=/data/storage
-RUN mkdir -p /data/storage && chown -R node:node /data /app
+RUN mkdir -p /data/storage && chown node:node /data/storage
 USER node
 VOLUME ["/data/storage"]
 EXPOSE 3000

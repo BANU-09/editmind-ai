@@ -8,6 +8,20 @@ let pending;
 let ready;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+function workerEnvironment() {
+  const names=['EDITMIND_PLANNER_URL','EDITMIND_PUBLIC_ORIGIN','STT_PROVIDER','STT_CONCURRENCY',
+    'STT_WHISPER_MODEL','CORS_ORIGIN','API_WRITES_PER_MINUTE','COMPUTE_USD_PER_HOUR',
+    'CALLBACK_ALLOWED_URLS','CALLBACK_HMAC_SECRET','S3_BUCKET','S3_REGION','S3_ENDPOINT'];
+  const env=Object.fromEntries(names.filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
+  if (env.S3_BUCKET) {
+    for (const [key,setting] of Object.entries({
+      AWS_ACCESS_KEY_ID:'EDITMIND_S3_ACCESS_KEY_ID',AWS_SECRET_ACCESS_KEY:'EDITMIND_S3_SECRET_ACCESS_KEY',
+      AWS_SESSION_TOKEN:'EDITMIND_S3_SESSION_TOKEN',
+    })) if (process.env[setting]) env[key]=process.env[setting];
+  }
+  return env;
+}
+
 async function health(origin) {
   try {
     const response = await fetch(origin + '/api/health', { signal: AbortSignal.timeout(3500) });
@@ -57,7 +71,7 @@ done` ]});
     const command = await sandbox.runCommand({
       cmd: 'flock', args: ['-n', '-E', '73', '/tmp/editmind-service.lock', 'bash', '-c',
         'set -e; cd "$1"; tar -xzf "$2"; rm -f "$2"; exec bash start.sh', 'editmind', dir, archivePath],
-      detached: true
+      env: workerEnvironment(), detached: true
     });
     for (let n = 0; n < 104; n++) {
       if ((await health(origin))?.mediaRevision===build.revision) return origin;

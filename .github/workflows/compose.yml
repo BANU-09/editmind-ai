@@ -1,0 +1,47 @@
+name: Compose and persisted S3 artifacts
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: editmind-review
+      EDITMIND_PORT: 3281
+      WARM_DEMO_LIBRARY: 0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start API and object store
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - name: Render, download and verify the stored MP4 and manifest
+        run: docker compose exec -T app node scripts/check-compose-storage.mjs --save-restart /data/storage/compose-verification.json | tee compose-roundtrip.json
+      - name: Recreate both containers with their persisted volumes
+        run: |
+          docker compose down
+          docker compose up -d --no-build --wait --wait-timeout 240
+      - name: Download the same result after restart
+        run: docker compose exec -T app node scripts/check-compose-storage.mjs --verify-restart /data/storage/compose-verification.json | tee compose-restart.json
+      - name: Publish storage verification results
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-storage-results
+          path: |
+            compose-roundtrip.json
+            compose-restart.json
+      - name: Show service diagnostics on failure
+        if: failure()
+        run: docker compose logs --tail 75 app objects
+      - name: Stop test services
+        if: always()
+        run: docker compose down -v
+

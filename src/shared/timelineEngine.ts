@@ -78,9 +78,15 @@ export function buildCaptionsFromAnalysis(analysis: MediaAnalysis): CaptionEntry
 }
 
 export function createInitialProjectState(analysis: MediaAnalysis): ProjectState {
+  // Boundary words from adjacent ASR chunks can arrive out of order or at
+  // the same timestamp. The unedited timeline must cover each second once.
+  const transcript = analysis.transcript.filter(t => t.start >= 0 && t.start < analysis.durationSec)
+    .slice().sort((a, b) => a.start - b.start);
+  const scenes = analysis.scenes.filter(s => s.start >= 0 && s.start < analysis.durationSec)
+    .slice().sort((a, b) => a.start - b.start);
   const initialSegments: TimelineSegment[] =
-    analysis.transcript.length > 0
-      ? analysis.transcript.map((t, idx) => {
+    transcript.length > 0
+      ? transcript.map((t, idx) => {
           const matchedScene = analysis.scenes.find(
             (sc) => Math.min(sc.end, t.end) - Math.max(sc.start, t.start) > 0.15,
           );
@@ -88,7 +94,7 @@ export function createInitialProjectState(analysis: MediaAnalysis): ProjectState
             id: `seg-init-${idx + 1}`,
             sourceSegmentId: t.id,
             sourceStart: idx === 0 ? 0 : t.start,
-            sourceEnd: analysis.transcript[idx + 1]?.start ?? analysis.durationSec,
+            sourceEnd: transcript[idx + 1]?.start ?? analysis.durationSec,
             timelineStart: t.start,
             timelineEnd: t.end,
             speed: 1,
@@ -103,12 +109,12 @@ export function createInitialProjectState(analysis: MediaAnalysis): ProjectState
             locked: false,
           };
         })
-      : analysis.scenes.length > 1
-        ? analysis.scenes.map((sc, idx) => ({
+      : scenes.length > 1
+        ? scenes.map((sc, idx) => ({
             id: `seg-sc-${idx + 1}`,
             sourceSegmentId: sc.id,
-            sourceStart: sc.start,
-            sourceEnd: sc.end,
+            sourceStart: idx ? sc.start : 0,
+            sourceEnd: scenes[idx+1]?.start ?? analysis.durationSec,
             timelineStart: sc.start,
             timelineEnd: sc.end,
             speed: 1,
@@ -125,9 +131,9 @@ export function createInitialProjectState(analysis: MediaAnalysis): ProjectState
               id: 'seg-init-1',
               sourceSegmentId: 'src-full',
               sourceStart: 0,
-              sourceEnd: Math.max(0.5, analysis.durationSec),
+              sourceEnd: analysis.durationSec,
               timelineStart: 0,
-              timelineEnd: Math.max(0.5, analysis.durationSec),
+              timelineEnd: analysis.durationSec,
               speed: 1,
               volume: 1,
               muted: false,

@@ -61,7 +61,10 @@ function apply(
       const lo = op.sourceStart!,
         hi = op.sourceEnd!;
       if (unchanged(state, lo, hi))
-        fail('The selected material is no longer on the timeline.', 'CONTENT_REMOVED');
+        fail('The selected material is no longer on the timeline.', 'CONTENT_REMOVED', {
+          start: lo,
+          end: hi,
+        });
       if (
         op.type === 'SET_SPEED' &&
         state.segments.every(
@@ -101,7 +104,10 @@ function apply(
     )
       continue;
     if (op.type === 'MOVE_RANGE' && !visible(state, op.sourceStart!, op.sourceEnd!))
-      fail('The requested source section was removed.', 'CONTENT_REMOVED');
+      fail('The requested source section was removed.', 'CONTENT_REMOVED', {
+        start: op.sourceStart!,
+        end: op.sourceEnd!,
+      });
     const result = applyEditPlan(state, analysis, plan, { ignoreProtection: true });
     if (!result.appliedCount)
       fail(result.message || 'A track is locked or the operation has no target.', 'OPERATION_UNAVAILABLE');
@@ -375,6 +381,25 @@ export function stepSession(
     );
   } catch (error) {
     if (!(error instanceof InstructionError)) throw error;
-    return finish(session, 'rejected', error.code, 'No changes applied. ' + error.message);
+    let reason = error.message;
+    if (error.sourceRange) {
+      const { start, end } = error.sourceRange;
+      const prior = activeEvents(session)
+        .reverse()
+        .find((event) =>
+          event.operations.some((op) => {
+            if (op.type === 'KEEP_ONLY_RANGE')
+              return !op.keepRanges?.some((r) => overlaps(r.start, r.end, start, end) > 0);
+            if (!/^(REMOVE_RANGE|REMOVE_WORD|REMOVE_SILENCES|REMOVE_FILLERS)$/.test(op.type)) return false;
+            return (op.removeRanges ?? [{ start: op.sourceStart!, end: op.sourceEnd! }]).some(
+              (r) => overlaps(r.start, r.end, start, end) > 0,
+            );
+          }),
+        );
+      if (prior)
+        reason +=
+          ' Earlier edit ' + prior.id + ' (“' + prior.prompt + '”) removed material in this interval.';
+    }
+    return finish(session, 'rejected', error.code, 'No changes applied. ' + reason);
   }
 }
