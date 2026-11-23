@@ -370,10 +370,10 @@ async function startServer() {
       origin &&
         (isWildcard || cfg.corsOrigins.includes(origin)),
     );
+    res.vary('Origin');
     if (origin && isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Vary', 'Origin');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader(

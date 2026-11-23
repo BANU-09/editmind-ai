@@ -1,0 +1,206 @@
+{
+  "type": "Candidate-authored practice scenarios",
+  "site": "https://editmind-ai-banu09.vercel.app",
+  "startedUtc": "2026-11-23T20:12:44.195Z",
+  "source": {
+    "file": "studio.mp4",
+    "seconds": 120,
+    "sha256": "7c6de431bed0d657ce50148c1e87f4bd079a62577f6b50d4b1a6b544f47cb672"
+  },
+  "cases": [
+    {
+      "name": "Caption inside a retimed excerpt",
+      "prediction": "A source caption at 18–20 s plays at 3–4 s in a 13 s excerpt.",
+      "steps": [
+        {
+          "instruction": "Keep only 14 to 30 seconds",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 16,
+          "observedSeconds": 16,
+          "code": "EDIT_APPLIED",
+          "hash": "98a9a6d3a76aaf853d0b46583241f902996d7175d62c4a9c31b712cfcc0ed1eb"
+        },
+        {
+          "instruction": "Add caption \"Desk check\" at 0:18 for 2 seconds",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 16,
+          "observedSeconds": 16,
+          "code": "EDIT_APPLIED",
+          "hash": "8957cd614600ace42fe6416688f2d9a83163606314eebdd3554007fb4c82a583"
+        },
+        {
+          "instruction": "Make that caption red",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 16,
+          "observedSeconds": 16,
+          "code": "EDIT_APPLIED",
+          "hash": "00595392e6d9b341d59191488cebeb3c46fc479f240026e6c9dab99f346789f5"
+        },
+        {
+          "instruction": "Speed up 16 to 22 by 2x",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 13,
+          "observedSeconds": 13,
+          "code": "EDIT_APPLIED",
+          "hash": "324dd7ffb0705bb8d4a3b35887a517f5c3874d706c12760102f93239dd009ad9"
+        }
+      ],
+      "render": {
+        "fps": 15,
+        "videoSeconds": 13,
+        "audioSeconds": 13,
+        "observedCaptionSeconds": [
+          3,
+          4
+        ]
+      },
+      "passed": true
+    },
+    {
+      "name": "Ambiguous word followed by undo",
+      "prediction": "The two spoken occurrences of library need a choice. Bleeping the second targets only the later occurrence, and undo restores the initial hash.",
+      "steps": [
+        {
+          "instruction": "Bleep the word library",
+          "expectedStatus": "needs_clarification",
+          "observedStatus": "needs_clarification",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "CHOOSE_OPTION",
+          "hash": "10a50267b6c0308dc26993872f1313ba1b9489adca524f79d878c46a22341296"
+        },
+        {
+          "instruction": "the second one",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "EDIT_APPLIED",
+          "hash": "7bd6a4d413bf32f53655cec6bffc47c9bdbd2947576f7f4eb9669b509e33d9b7",
+          "details": {
+            "chosenSourceSeconds": [
+              84.4,
+              84.643
+            ]
+          }
+        },
+        {
+          "instruction": "Undo",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "UNDO",
+          "hash": "10a50267b6c0308dc26993872f1313ba1b9489adca524f79d878c46a22341296"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "A new edit after undo",
+      "prediction": "Undo restores the intact source. A new overlay discards the old redo branch.",
+      "steps": [
+        {
+          "instruction": "Remove 112 to 116 seconds",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 116,
+          "observedSeconds": 116,
+          "code": "EDIT_APPLIED",
+          "hash": "c7afb5e906e078d4121ea3ba3cd2541cf938e1c0531cb67fefa0d3427ddedbc3"
+        },
+        {
+          "instruction": "Undo",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "UNDO",
+          "hash": "10a50267b6c0308dc26993872f1313ba1b9489adca524f79d878c46a22341296"
+        },
+        {
+          "instruction": "Add text overlay \"Archive\" at 0:54 for 2 seconds",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "EDIT_APPLIED",
+          "hash": "737a62b69b5e483da1ae966825b2088387c895d185314874577c9be52e5d34ce"
+        },
+        {
+          "instruction": "Redo",
+          "expectedStatus": "rejected",
+          "observedStatus": "rejected",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "HISTORY_BOUNDARY",
+          "hash": "737a62b69b5e483da1ae966825b2088387c895d185314874577c9be52e5d34ce"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "Overlapping rates on the source clock",
+      "prediction": "The final rates are 2× over 60–64 s and 0.5× over 64–72 s. The 120 s source becomes 126 s.",
+      "steps": [
+        {
+          "instruction": "Speed up 60 to 68 by 2x",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 116,
+          "observedSeconds": 116,
+          "code": "EDIT_APPLIED",
+          "hash": "20a152e2551ce41965eb01e36ffb3509f7ff5e58a1ccd03b9cce01ecad405751"
+        },
+        {
+          "instruction": "Slow down 64 to 72 by 0.5x",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 126,
+          "observedSeconds": 126,
+          "code": "EDIT_APPLIED",
+          "hash": "6ec9bf3edec7e761fde1b8f4fb01444bb2ecf13c6a4e0fca79a2358e3d277c52"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "Atomic rejection and recovery",
+      "prediction": "An unsupported 9× rate rejects both clauses. Undo has no entry. A later valid slowdown adds four seconds.",
+      "steps": [
+        {
+          "instruction": "Cut 113 to 115 and then speed up 20 to 24 by 9x",
+          "expectedStatus": "rejected",
+          "observedStatus": "rejected",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "INVALID_SPEED",
+          "hash": "10a50267b6c0308dc26993872f1313ba1b9489adca524f79d878c46a22341296"
+        },
+        {
+          "instruction": "Undo",
+          "expectedStatus": "rejected",
+          "observedStatus": "rejected",
+          "expectedSeconds": 120,
+          "observedSeconds": 120,
+          "code": "HISTORY_BOUNDARY",
+          "hash": "10a50267b6c0308dc26993872f1313ba1b9489adca524f79d878c46a22341296"
+        },
+        {
+          "instruction": "Slow down 36 to 40 by 0.5x",
+          "expectedStatus": "applied",
+          "observedStatus": "applied",
+          "expectedSeconds": 124,
+          "observedSeconds": 124,
+          "code": "EDIT_APPLIED",
+          "hash": "c6606bc5b4dbcd064936e23d0bb7672f50c7a7816b7bf8eaa3b4004a12ab40e3"
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

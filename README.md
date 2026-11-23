@@ -23,6 +23,23 @@ Visit http://localhost:3000 and check readiness at http://localhost:3000/ready. 
 
 For development or tests on the host, install Node.js 24, npm, FFmpeg with FFprobe, libx264, libass and libflite, and a font such as DejaVu Sans. Install locked dependencies once with `npm ci`. Run `npm test` to start an isolated HTTP server and execute the unit, session, media and integration tests. Local speech recognition runs on CPU. A cold test installation needs network access to fetch the speech model. Use `npm run lint` for TypeScript and `npm run build` for the web bundle.
 
+## How a session reaches the exported file
+
+```mermaid
+flowchart LR
+    B[Browser or CLI] -->|Upload file or import URL| A[Versioned Express API]
+    A -->|Media job| W[FFmpeg and Whisper]
+    W -->|Word times and media analysis| DB[(SQLite)]
+    B -->|Instruction and optional clarification| A
+    A -->|Current session and source analysis| E[Deterministic session engine]
+    E -->|Operation history and timeline| DB
+    DB -->|Session snapshot| R[FFmpeg renderer]
+    R --> O[MP4 and manifest]
+    DB --> T[OpenTimelineIO export]
+```
+
+In a structured session, a caption belongs to words in the original recording. Preview and export project those source times through the same surviving timeline intervals. In a separate AI conversation, a model can propose edits or answer questions about a transcript. [Timeline design](docs/timeline.md) · [Session engine](server/sessionEngine.ts) · [Render projection](src/shared/renderProjection.ts)
+
 ## Run the assessment sessions
 
 ```sh

@@ -1,0 +1,20 @@
+{
+  "scope": "Illustrative CPU and memory cost of the measured speech transcription phase only",
+  "currency": "USD",
+  "pricing_source": "https://vercel.com/pricing",
+  "assumptions": {
+    "vcpus": 2,
+    "assumed_provisioned_gb": 4,
+    "usd_per_active_vcpu_hour": 0.128,
+    "usd_per_provisioned_gb_hour": 0.0212,
+    "active_fraction_for_this_example": 1
+  },
+  "formula": "(vcpus * active_fraction * cpu_rate + memory_gb * memory_rate) * transcription_ms / 3600000 / source_minutes",
+  "samples": [
+    {"source":"studio-five","source_minutes":5,"reported_transcription_ms":34298,"estimated_usd_per_source_minute":0.0006494},
+    {"source":"hour-narrated","source_minutes":60,"reported_transcription_ms":406602,"estimated_usd_per_source_minute":0.0006415}
+  ],
+  "excluded": ["idle time outside STT","upload","encoding and export","storage and transfers","base plan","included allowances","taxes"],
+  "metered_model_api_cost_usd": 0,
+  "actual_invoice_available": false
+}

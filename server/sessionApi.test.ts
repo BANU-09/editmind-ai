@@ -27,7 +27,7 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
   const child=spawn(process.execPath,['--import','tsx','server.ts'],{cwd:root,windowsHide:true,
     env:{...process.env,NODE_ENV:'production',PORT:String(port),STORAGE_DIR:temporary,STT_PROVIDER:'mock',FORCE_LOCAL_STT:'0',GEMINI_API_KEY:'',
       JOB_POLL_MS:'110',WARM_DEMO_LIBRARY:'0',S3_BUCKET:'',BLOB_READ_WRITE_TOKEN:'',WORKER_URL:'',MOCK_STT_TEXT:'The first chapter starts with a welcome.',
-      CALLBACK_ALLOW_HTTP:'1',CALLBACK_ALLOWED_URLS:callbackUrl,CALLBACK_HMAC_SECRET:secret},stdio:['ignore','pipe','pipe']});
+      CORS_ORIGIN:'https://editor.example',CALLBACK_ALLOW_HTTP:'1',CALLBACK_ALLOWED_URLS:callbackUrl,CALLBACK_HMAC_SECRET:secret},stdio:['ignore','pipe','pipe']});
   let logs='';child.stdout.on('data',b=>{logs=(logs+b).slice(-30000);});child.stderr.on('data',b=>{logs=(logs+b).slice(-30000);});
   const guest='http-repro-guest';
   const headers=(key?:string)=>({'x-guest-id':guest,'X-Correlation-Id':'http-check-01',...(key?{'Idempotency-Key':key}:{})});
@@ -56,6 +56,14 @@ test('versioned HTTP intake, scoped retries, session edit, render, evidence and 
       await wait(200);
     }
     assert.ok(ready,logs);
+    // A plain <img> request can precede the same URL's cross-origin video poster.
+    // Both variants must have distinct HTTP cache keys.
+    const plain=await fetch(url+'/ready');
+    assert.match(plain.headers.get('vary')||'',/\borigin\b/i);
+    assert.equal(plain.headers.get('access-control-allow-origin'),null);
+    const cors=await fetch(url+'/ready',{headers:{Origin:'https://editor.example'}});
+    assert.match(cors.headers.get('vary')||'',/\borigin\b/i);
+    assert.equal(cors.headers.get('access-control-allow-origin'),'https://editor.example');
     assert.equal((await fetch(url+'/api/v1/jobs/missing')).status,401);
     const input=path.join(temporary,'fixture.mp4');
     execFileSync('ffmpeg',['-nostdin','-v','error','-f','lavfi','-i','testsrc2=s=160x120:r=15','-f','lavfi','-i','sine=frequency=330:sample_rate=16000','-t','3','-c:v','libx264','-c:a','aac',input]);
