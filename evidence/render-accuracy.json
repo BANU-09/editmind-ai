@@ -1,0 +1,355 @@
+{
+  "fixture": "Original procedural flash and synchronized audio markers",
+  "fps": 24,
+  "cases": [
+    {
+      "case": "Mixed reorder, trim, speed and titles",
+      "timelineSeconds": 6.56,
+      "videoSeconds": 6.541667,
+      "lengthErrorFrames": 0.4399919999999824,
+      "observations": [
+        {
+          "source": 2.5,
+          "expected": 0.41000000000000014,
+          "visual": 0.4166666666666667,
+          "audio": 0.41
+        },
+        {
+          "source": 3.5,
+          "expected": 1.4100000000000001,
+          "visual": 1.4166666666666667,
+          "audio": 1.41
+        },
+        {
+          "source": 0.5,
+          "expected": 2.5100000000000007,
+          "visual": 2.5,
+          "audio": 2.51
+        },
+        {
+          "source": 1.5,
+          "expected": 3.5100000000000007,
+          "visual": 3.5,
+          "audio": 3.51
+        },
+        {
+          "source": 4.5,
+          "expected": 4.066666666666666,
+          "visual": 4.083333333333333,
+          "audio": 4.055
+        },
+        {
+          "source": 5.5,
+          "expected": 4.733333333333333,
+          "visual": 4.75,
+          "audio": 4.725
+        },
+        {
+          "source": 6.5,
+          "expected": 5.4,
+          "visual": 5.416666666666667,
+          "audio": 5.39
+        },
+        {
+          "source": 7.5,
+          "expected": 6.066666666666666,
+          "visual": 6.083333333333333,
+          "audio": 6.05
+        }
+      ],
+      "maxAvOffsetFrames": 0.7999999999999972,
+      "maxVisualOffsetFrames": 0.3999999999999986
+    },
+    {
+      "case": "Twelve non-frame-aligned slices",
+      "timelineSeconds": 5.79,
+      "videoSeconds": 5.791667,
+      "lengthErrorFrames": 0.04000800000000737,
+      "observations": [
+        {
+          "source": 0.5,
+          "expected": 0.474,
+          "visual": 0.4583333333333333,
+          "audio": 0.475
+        },
+        {
+          "source": 1.5,
+          "expected": 1.439,
+          "visual": 1.4583333333333333,
+          "audio": 1.44
+        },
+        {
+          "source": 2.5,
+          "expected": 2.4040000000000004,
+          "visual": 2.4166666666666665,
+          "audio": 2.405
+        },
+        {
+          "source": 3.5,
+          "expected": 3.3690000000000007,
+          "visual": 3.375,
+          "audio": 3.37
+        },
+        {
+          "source": 4.5,
+          "expected": 4.3340000000000005,
+          "visual": 4.333333333333333,
+          "audio": 4.335
+        },
+        {
+          "source": 5.5,
+          "expected": 5.2989999999999995,
+          "visual": 5.291666666666667,
+          "audio": 5.3
+        }
+      ],
+      "maxAvOffsetFrames": 0.4399999999999995,
+      "maxVisualOffsetFrames": 0.46399999999999686
+    },
+    {
+      "case": "Fragmented mutes and bleeps",
+      "timelineSeconds": 8,
+      "videoSeconds": 8,
+      "lengthErrorFrames": 0
+    },
+    {
+      "case": "Ducked background music (calibrated 220 Hz input)",
+      "timelineSeconds": 8,
+      "videoSeconds": 8,
+      "lengthErrorFrames": 0,
+      "musicDuringForeground": 0.021867813639901815,
+      "musicDuringQuiet": 0.10430739380699952
+    },
+    {
+      "case": "Original electric-piano and bass arrangement",
+      "timelineSeconds": 8,
+      "videoSeconds": 8,
+      "lengthErrorFrames": 0,
+      "previewMp4WaveformCorrelation": 0.9999944050785311
+    },
+    {
+      "case": "Short audio with silent tail moved before speech",
+      "timelineSeconds": 4.7,
+      "videoSeconds": 4.708333,
+      "lengthErrorFrames": 0.1999919999999875
+    },
+    {
+      "case": "VFR, no audio, reordered",
+      "timelineSeconds": 4.425,
+      "videoSeconds": 4.416667,
+      "lengthErrorFrames": 0.1999919999999875
+    },
+    {
+      "case": "20 pause cuts in bundled keynote narration",
+      "timelineSeconds": 53.65,
+      "videoSeconds": 53.666667,
+      "lengthErrorFrames": 0.40000799999995706,
+      "joins": [
+        {
+          "sourceCut": {
+            "start": 3.534,
+            "end": 3.978,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 3.534,
+          "removedPeakDbfs": -62.08696604392202,
+          "correlation": 0.9998038167658203
+        },
+        {
+          "sourceCut": {
+            "start": 4.533,
+            "end": 4.682,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 4.089,
+          "removedPeakDbfs": -47.858543627656125,
+          "correlation": 0.9999596959223765
+        },
+        {
+          "sourceCut": {
+            "start": 7.478,
+            "end": 7.653,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 6.885,
+          "removedPeakDbfs": -42.95645481690465,
+          "correlation": 0.9999666948935032
+        },
+        {
+          "sourceCut": {
+            "start": 9.312,
+            "end": 11.23,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 8.544,
+          "removedPeakDbfs": -61.7760708001114,
+          "correlation": 0.9988099266565041
+        },
+        {
+          "sourceCut": {
+            "start": 13.107,
+            "end": 13.414,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 10.421,
+          "removedPeakDbfs": -51.12559406216,
+          "correlation": 0.9999301240590781
+        },
+        {
+          "sourceCut": {
+            "start": 15.434,
+            "end": 15.581,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 12.441,
+          "removedPeakDbfs": -41.152667752482195,
+          "correlation": 0.9999753917798995
+        },
+        {
+          "sourceCut": {
+            "start": 16.641,
+            "end": 16.742,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 13.501,
+          "removedPeakDbfs": -56.16172946999569,
+          "correlation": 0.9998376689601203
+        },
+        {
+          "sourceCut": {
+            "start": 18.794,
+            "end": 19.552,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 15.553,
+          "removedPeakDbfs": -63.240392321243455,
+          "correlation": 0.9996189708010444
+        },
+        {
+          "sourceCut": {
+            "start": 20.006,
+            "end": 20.086,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 16.007,
+          "removedPeakDbfs": -54.47354501617488,
+          "correlation": 0.9999740148230281
+        },
+        {
+          "sourceCut": {
+            "start": 21.869,
+            "end": 22.291,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 17.79,
+          "removedPeakDbfs": -51.73919743809732,
+          "correlation": 0.9999418809506372
+        },
+        {
+          "sourceCut": {
+            "start": 25.281,
+            "end": 25.373,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 20.78,
+          "removedPeakDbfs": -43.901704187512614,
+          "correlation": 0.9999759679810314
+        },
+        {
+          "sourceCut": {
+            "start": 27.379,
+            "end": 29.527,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 22.786,
+          "removedPeakDbfs": -59.91215393567447,
+          "correlation": 0.9999868072424984
+        },
+        {
+          "sourceCut": {
+            "start": 32.615,
+            "end": 33.088,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 25.874,
+          "removedPeakDbfs": -59.05982228589277,
+          "correlation": 0.9999288604541263
+        },
+        {
+          "sourceCut": {
+            "start": 36.45,
+            "end": 36.694,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 29.236,
+          "removedPeakDbfs": -43.972719112401386,
+          "correlation": 0.9999783444467344
+        },
+        {
+          "sourceCut": {
+            "start": 38.439,
+            "end": 39.38,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 30.981,
+          "removedPeakDbfs": -58.95838939610048,
+          "correlation": 0.9999233835075271
+        },
+        {
+          "sourceCut": {
+            "start": 41.391,
+            "end": 41.694,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 32.992,
+          "removedPeakDbfs": -48.072883771083696,
+          "correlation": 0.9999658299863202
+        },
+        {
+          "sourceCut": {
+            "start": 44.215,
+            "end": 44.328,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 35.513,
+          "removedPeakDbfs": -52.8384956834638,
+          "correlation": 0.9999510816044013
+        },
+        {
+          "sourceCut": {
+            "start": 46.276,
+            "end": 48.1,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 37.461,
+          "removedPeakDbfs": -63.83433222348159,
+          "correlation": 0.9997941158564286
+        },
+        {
+          "sourceCut": {
+            "start": 50.46,
+            "end": 50.679,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 39.821,
+          "removedPeakDbfs": -51.44506141486421,
+          "correlation": 0.9999832249127302
+        },
+        {
+          "sourceCut": {
+            "start": 53.148,
+            "end": 53.432,
+            "label": "Detected quiet gap"
+          },
+          "timelineJoin": 42.29,
+          "removedPeakDbfs": -44.55361314210623,
+          "correlation": 0.9999359583681051
+        }
+      ],
+      "method": "Decoded PCM compared across 600 ms around each seam. Human listening not recorded."
+    }
+  ],
+  "sourceHashBefore": "53f27a072b2aae2f2c4ef557f6df847fd2a3b28a03ac98dd599bb60b87dc800b",
+  "sourceHashAfter": "53f27a072b2aae2f2c4ef557f6df847fd2a3b28a03ac98dd599bb60b87dc800b",
+  "ffmpeg": "ffmpeg version 8.1.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+}

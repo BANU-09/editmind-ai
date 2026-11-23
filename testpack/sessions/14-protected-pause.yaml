@@ -1,0 +1,9 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Protect the pause from 87 to 90"
+    expect: applied
+  - say: "Remove silences longer than 2 seconds"
+    expect: applied

@@ -1,0 +1,12 @@
+node_modules
+.git
+.vercel
+.media-worker
+storage
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+

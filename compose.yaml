@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    init: true
+    ports:
+      - "${EDITMIND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      STORAGE_DIR: /data/storage
+      STT_PROVIDER: ${STT_PROVIDER:-whisper}
+      STT_WHISPER_MODEL: ${STT_WHISPER_MODEL:-Xenova/whisper-base}
+      WARM_DEMO_LIBRARY: ${WARM_DEMO_LIBRARY:-1}
+      EDITMIND_RELEASE: ${EDITMIND_RELEASE:-1.0.0}
+      COMPUTE_USD_PER_HOUR: ${COMPUTE_USD_PER_HOUR:-}
+      CALLBACK_ALLOWED_URLS: ${CALLBACK_ALLOWED_URLS:-}
+      CALLBACK_HMAC_SECRET: ${CALLBACK_HMAC_SECRET:-}
+      API_WRITES_PER_MINUTE: ${API_WRITES_PER_MINUTE:-180}
+      S3_ENDPOINT: http://objects:8333
+      S3_BUCKET: editmind
+      S3_REGION: us-east-1
+      S3_CREATE_BUCKET: "1"
+      # The isolated local S3 service accepts requests without an identity.
+      # The SDK needs credentials to sign requests. These values are not production credentials.
+      AWS_ACCESS_KEY_ID: local-compose
+      AWS_SECRET_ACCESS_KEY: local-compose
+    volumes:
+      - media:/data/storage
+    depends_on:
+      - objects
+    restart: unless-stopped
+  objects:
+    image: chrislusf/seaweedfs:4.00
+    command: server -dir=/data -s3 -s3.port=8333 -ip=objects -volume.max=4
+    volumes:
+      - objects:/data
+    restart: unless-stopped
+volumes:
+  media:
+  objects:
+

@@ -150,6 +150,8 @@ export interface AudioStreamInfo {
   language?: string;
   title?: string;
   bitrate?: number;
+  startTime?: number;
+  durationSec?: number;
 }
 
 export interface ChunkProgressStats {
@@ -209,6 +211,7 @@ export interface ApiErrorEnvelope {
 }
 
 export interface MediaAnalysis {
+  variableFrameRate?: boolean;
   mediaId: string;
   durationSec: number;
   width: number;
@@ -296,6 +299,7 @@ export interface CaptionStyle {
 }
 
 export interface CaptionEntry {
+  customText?: boolean;
   id: string;
   sourceSegmentId?: string;
   speakerId?: string;
@@ -309,6 +313,7 @@ export interface CaptionEntry {
 }
 
 export interface TextOverlay {
+  sourceRanges?: Array<{start: number; end: number}>;
   id: string;
   text: string;
   timelineStart: number;
@@ -336,6 +341,7 @@ export interface MuteRange {
 }
 
 export interface AudioSettings {
+  duckUnderSpeech?: boolean;
   masterVolume: number; // 0..2
   muted: boolean;
   noiseReduction: boolean;
@@ -371,6 +377,7 @@ export interface TrackLocks {
 }
 
 export interface ProjectState {
+  protectedPauses?: Array<{start: number; end: number}>;
   mediaId: string;
   segments: TimelineSegment[];
   duration: number;
@@ -388,6 +395,10 @@ export interface ProjectState {
 }
 
 export type EditOperationType =
+  | 'ADD_CAPTION'
+  | 'STYLE_CAPTION'
+  | 'MOVE_RANGE'
+  | 'PROTECT_PAUSE'
   | 'REMOVE_RANGE'
   | 'REMOVE_WORD'
   | 'MUTE_RANGE'
@@ -425,6 +436,8 @@ export type TargetScope =
   | 'segment';
 
 export interface EditOperation {
+  caption?: CaptionEntry;
+  moveTo?: 'start' | 'end';
   type: EditOperationType;
   label: string;
   targetScope?: TargetScope;

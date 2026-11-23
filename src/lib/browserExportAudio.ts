@@ -64,7 +64,14 @@ export function createBrowserExportAudio(project: HydratedProject, state: Projec
       if (playing && voice.paused && pos.time < voice.duration - 0.03) await voice.play();
       previousSegment = segment.id;
     }
-    if (music) music.volume = Math.min(1, Math.max(0, state.audio.musicVolume));
+    const dialogue = audible && !mute && !bleep && state.captions.some(caption =>
+      !caption.customText && caption.sourceStart <= sourceTime && sourceTime < caption.sourceEnd);
+    const mixGain = state.audio.duckUnderSpeech !== false && dialogue ? 0.25 : 1;
+    const musicGain = Math.min(1, Math.max(0, state.audio.musicVolume * mixGain));
+    if (music) music.volume = musicGain;
+    if (playing && hasMusic && state.audio.musicPreset !== 'custom-upload') {
+      bed.update({ active: true, preset: state.audio.musicPreset, volume: musicGain, offset: time + (state.audio.musicStartOffsetSec || 0) });
+    }
   }
 
   return {
@@ -82,7 +89,7 @@ export function createBrowserExportAudio(project: HydratedProject, state: Projec
       await sync(0);
       if (music && music.duration > 0) music.currentTime = (state.audio.musicStartOffsetSec || 0) % music.duration;
       if (hasMusic && state.audio.musicPreset !== 'custom-upload') {
-        bed.update({ active: true, preset: state.audio.musicPreset, volume: state.audio.musicVolume });
+        bed.update({ active: true, preset: state.audio.musicPreset, volume: state.audio.musicVolume, offset: state.audio.musicStartOffsetSec });
       }
       await Promise.all(inputs.map(el => el.play()));
     },

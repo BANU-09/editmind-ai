@@ -1,0 +1,9 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Speed up 30-40 by 2x"
+    expect: applied
+  - say: "Speed up 35-45 by 4x"
+    expect: applied

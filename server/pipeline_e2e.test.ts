@@ -37,7 +37,7 @@ import { validateSafePublicHttpUrl } from './urlImporter';
 import { isAuthorizedWorkerRequest } from './workerBridge';
 
 const execFileAsync = promisify(execFile);
-const TMP_DIR = path.resolve(process.cwd(), 'storage', '.test_media_tmp');
+const TMP_DIR = path.join(getAppConfig().storageDir, '.test_media_tmp');
 const createdMediaIds: string[] = [];
 const createdProjectIds: string[] = [];
 const createdJobIds: string[] = [];
@@ -826,15 +826,8 @@ describe('EDITMIND AI — Chunked Transcription, Recovery, Word Editing & Multi-
   });
 
   it('supports streamed chunked multipart upload assembly and cross-owner 403 isolation against active API server', async () => {
-    const baseUrl = 'http://127.0.0.1:3000';
-    let serverUp = false;
-    try {
-      const h = await fetch(`${baseUrl}/api/health`);
-      serverUp = h.ok;
-    } catch {
-      serverUp = false;
-    }
-    if (!serverUp) return;
+    const baseUrl = process.env.EDITMIND_TEST_BASE || 'http://127.0.0.1:3000';
+    assert.ok((await fetch(`${baseUrl}/api/health`)).ok, 'The HTTP integration server must be ready');
 
     const vidPath = path.join(TMP_DIR, 'multipart_src.mp4');
     await generateSpokenVideo({

@@ -1,0 +1,11 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Add caption \"Studio\" at 0:42 for 3 seconds"
+    expect: applied
+  - say: "Remove 40-46"
+    expect: applied
+  - say: "Undo"
+    expect: applied

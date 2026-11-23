@@ -1,0 +1,9 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Mute the word microphone"
+    expect: applied
+  - say: "Bleep the word camera"
+    expect: applied

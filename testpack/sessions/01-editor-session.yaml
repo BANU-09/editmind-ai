@@ -1,0 +1,23 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Add caption \"On air\" when I say Welcome to the channel"
+    expect: applied
+  - say: "Cut the first 30 seconds"
+    expect: applied
+  - say: "Remove the part about pricing"
+    expect: needs_clarification
+    answer: "the second one"
+    expect_answer: applied
+  - say: "Speed up from 1:00 to 1:30 by 2x"
+    expect: applied
+  - say: "Actually put the intro back"
+    expect: applied
+  - say: "Undo"
+    expect: applied
+  - say: "Make that caption red"
+    expect: applied
+  - say: "Render"
+    expect: applied

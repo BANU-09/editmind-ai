@@ -1,0 +1,11 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Remove 10-20"
+    expect: applied
+  - say: "Undo"
+    expect: applied
+  - say: "Redo"
+    expect: applied

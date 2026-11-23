@@ -1,0 +1,13 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Cut 30-40"
+    expect: applied
+  - say: "Undo"
+    expect: applied
+  - say: "Cut 60-70"
+    expect: applied
+  - say: "Redo"
+    expect: rejected

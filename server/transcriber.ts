@@ -34,6 +34,8 @@ export interface DetailedProbeMetadata {
   width: number;
   height: number;
   fps: number;
+  variableFrameRate: boolean;
+  videoDurationSec?: number;
   hasAudio: boolean;
   detectedAudioStreams: number;
   audioStreams: AudioStreamInfo[];
@@ -123,7 +125,7 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
     '-v',
     'error',
     '-show_entries',
-    'format=duration:stream=index,codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels,channel_layout,bit_rate:stream_tags=rotate,language,title',
+    'format=duration:stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,start_time,duration,sample_rate,channels,channel_layout,bit_rate:stream_tags=rotate,language,title:stream_side_data=rotation',
     '-of',
     'json',
     filePath,
@@ -138,6 +140,10 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
       width?: number;
       height?: number;
       r_frame_rate?: string;
+      avg_frame_rate?: string;
+      start_time?: string;
+      duration?: string;
+      side_data_list?: {rotation?:number}[];
       sample_rate?: string;
       channels?: number;
       channel_layout?: string;
@@ -148,6 +154,7 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
 
   const streams = parsed.streams || [];
   const videoStream = streams.find((s) => s.codec_type === 'video');
+  if (!videoStream) throw new Error('The file contains no video stream.');
   const audioStreamsRaw = streams.filter((s) => s.codec_type === 'audio');
 
   const audioStreams: AudioStreamInfo[] = audioStreamsRaw.map((s, audioIndex) => ({
@@ -160,13 +167,18 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
     language: s.tags?.language,
     title: s.tags?.title,
     bitrate: s.bit_rate ? parseInt(s.bit_rate, 10) : undefined,
+    startTime: Number.isFinite(Number(s.start_time)) ? Number(s.start_time) : undefined,
+    durationSec: Number.isFinite(Number(s.duration)) ? Number(s.duration) : undefined,
   }));
 
-  let fps = 30;
-  if (videoStream?.r_frame_rate && videoStream.r_frame_rate.includes('/')) {
-    const [num, den] = videoStream.r_frame_rate.split('/').map(Number);
-    if (den > 0 && num > 0) fps = Math.round((num / den) * 100) / 100;
-  }
+  const rate = (ratio?:string) => {
+    const [n,d] = (ratio || '').split('/').map(Number);
+    return n>0 && d>0 ? n/d : 0;
+  };
+  const nominal=rate(videoStream.r_frame_rate);
+  const average=rate(videoStream.avg_frame_rate);
+  const variableFrameRate=average>0 && nominal>0 && Math.abs(average-nominal)/nominal>0.015;
+  const fps=nominal>0 && nominal<=120 ? nominal : average || 30;
 
   let durationSec = parseFloat(parsed.format?.duration || '0');
   if (!Number.isFinite(durationSec) || durationSec <= 0) {
@@ -177,14 +189,13 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
         const last = matches[matches.length - 1];
         durationSec = Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3]);
       }
-    } catch {
-      durationSec = 5;
-    }
+    } catch { /* An unmeasurable recording must not be presented as a known duration. */ }
   }
+  if (!Number.isFinite(durationSec) || durationSec<=0) throw new Error('Could not determine video duration.');
 
   let width = videoStream?.width || 1280;
   let height = videoStream?.height || 720;
-  const rot = Math.abs(parseInt(videoStream?.tags?.rotate || '0', 10));
+  const rot = Math.abs(videoStream.side_data_list?.find(s=>s.rotation!==undefined)?.rotation ?? parseInt(videoStream.tags?.rotate || '0', 10));
   if (rot === 90 || rot === 270) {
     const tmp = width;
     width = height;
@@ -192,10 +203,12 @@ export async function inspectMediaStreams(filePath: string): Promise<DetailedPro
   }
 
   return {
-    durationSec: Math.max(0.5, Math.round(durationSec * 1000) / 1000),
+    durationSec: Math.max(0.001, Math.round(durationSec * 1000) / 1000),
     width,
     height,
     fps: Math.min(120, Math.max(1, fps)),
+    variableFrameRate,
+    videoDurationSec: Number.isFinite(Number(videoStream.duration)) ? Number(videoStream.duration) : undefined,
     hasAudio: audioStreams.length > 0,
     detectedAudioStreams: audioStreams.length,
     audioStreams,

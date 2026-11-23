@@ -41,9 +41,10 @@ export function recalculateTimeline(segments: TimelineSegment[]): {
   let cursor = 0;
   const recalculated: TimelineSegment[] = [];
   for (const seg of segments) {
-    const srcDuration = Math.max(0.05, seg.sourceEnd - seg.sourceStart);
+    const srcDuration = seg.sourceEnd - seg.sourceStart;
+    if (srcDuration <= 0) continue;
     const speed = Math.min(4, Math.max(0.25, seg.speed || 1));
-    const tlDuration = round3(srcDuration / speed);
+    const tlDuration = srcDuration / speed;
     const next: TimelineSegment = {
       ...seg,
       speed,
@@ -53,7 +54,7 @@ export function recalculateTimeline(segments: TimelineSegment[]): {
       timelineEnd: round3(cursor + tlDuration),
     };
     recalculated.push(next);
-    cursor = round3(cursor + tlDuration);
+    cursor += tlDuration;
   }
   return {
     segments: recalculated,
@@ -240,6 +241,7 @@ export function mapTimelineTimeToSource(
 }
 
 export interface ProjectedCaption {
+  styleOverride?: Partial<CaptionStyle>;
   id: string;
   text: string;
   speaker?: string;
@@ -283,13 +285,14 @@ export function projectCaptionsToTimeline(state: ProjectState): ProjectedCaption
         });
 
       if (cap.words.length && !wordsInSeg.length) continue;
-      if (isWordMode && wordsInSeg.length > 0) {
+      if (isWordMode && !cap.customText && wordsInSeg.length > 0) {
         // Group into punchy 1-3 word blocks for crisp TikTok/Reels style word-level caption display
         const chunkSize = 2;
         for (let i = 0; i < wordsInSeg.length; i += chunkSize) {
           const chunk = wordsInSeg.slice(i, i + chunkSize);
           projected.push({
             id: `${cap.id}-${seg.id}-wc${i}`,
+            styleOverride: cap.styleOverride,
             text: chunk.map((w) => w.word).join(' '),
             speaker: cap.speaker,
             timelineStart: chunk[0].timelineStart,
@@ -311,7 +314,7 @@ export function projectCaptionsToTimeline(state: ProjectState): ProjectedCaption
       const tlEnd = seg.timelineStart + (overlapEnd - seg.sourceStart) / (seg.speed || 1);
 
       const text =
-        cap.words.length > 0 && wordsInSeg.length > 0 && wordsInSeg.length < cap.words.length
+        !cap.customText && cap.words.length > 0 && wordsInSeg.length > 0 && wordsInSeg.length < cap.words.length
           ? wordsInSeg.map((w) => w.word).join(' ')
           : cap.text;
 
@@ -319,13 +322,14 @@ export function projectCaptionsToTimeline(state: ProjectState): ProjectedCaption
 
       projected.push({
         id: `${cap.id}-${seg.id}`,
+        styleOverride: cap.styleOverride,
         text,
         speaker: cap.speaker,
         timelineStart: round3(tlStart),
         timelineEnd: round3(tlEnd),
         sourceStart: round3(overlapStart),
         sourceEnd: round3(overlapEnd),
-        words: wordsInSeg.map(({ id, word, timelineStart, timelineEnd }) => ({
+        words: (cap.customText ? [] : wordsInSeg).map(({ id, word, timelineStart, timelineEnd }) => ({
           id,
           word,
           timelineStart,
@@ -335,6 +339,19 @@ export function projectCaptionsToTimeline(state: ProjectState): ProjectedCaption
     }
   }
 
+  // Keep the start anchored. Use the available reading gap after accelerated
+  // speech, ending before the next caption or the end of the film.
+  if (state.segments.some(s => s.speed > 1)) {
+    const ordered = projected.slice().sort((a,b) => a.timelineStart - b.timelineStart);
+    for (let i = 0; i < ordered.length; i++) {
+      const cap = ordered[i];
+      const naturalDuration = cap.sourceEnd - cap.sourceStart;
+      const shown = cap.timelineEnd - cap.timelineStart;
+      if (shown + .002 >= naturalDuration || shown >= .7) continue;
+      cap.timelineEnd = round3(Math.max(cap.timelineEnd, Math.min(cap.timelineStart + .7,
+        ordered[i + 1]?.timelineStart ?? state.duration, state.duration)));
+    }
+  }
   return projected;
 }
 
@@ -449,6 +466,11 @@ function removeWordFromCaptionEntries(
         const wClean = w.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
         return wClean !== targetClean;
       });
+      if (cap.customText) {
+        // Preserve the author's wording whenever any spoken anchor survives.
+        // A time-only caption has no spoken words to trim.
+        return { ...cap, words: remainingWords, text: !cap.words.length || remainingWords.length ? cap.text : '' };
+      }
       const escapedTarget = targetWord
         ? targetWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         : '';
@@ -690,9 +712,50 @@ export function applyEditPlan(
   let audio = { ...state.audio };
   let activeVersionId = state.activeVersionId;
   let appliedCount = 0;
+  let protectedPauses = state.protectedPauses;
 
   for (const op of plan.operations) {
     switch (op.type) {
+      case 'ADD_CAPTION': {
+        if (op.caption && !state.trackLocks.captions && !captions.some(c => c.id === op.caption!.id)) {
+          captions = [op.caption, ...captions];
+          captionsEnabled = true;
+          appliedCount++;
+        }
+        break;
+      }
+      case 'STYLE_CAPTION': {
+        if (!state.trackLocks.captions && op.captionStylePatch && captions.some(c => c.id === op.captionId)) {
+          captions = captions.map(c => c.id === op.captionId
+            ? {...c, styleOverride: {...c.styleOverride, ...op.captionStylePatch}} : c);
+          appliedCount++;
+        }
+        break;
+      }
+      case 'PROTECT_PAUSE': {
+        if (op.sourceStart !== undefined && op.sourceEnd !== undefined) {
+          protectedPauses = [...(protectedPauses || []), {start:op.sourceStart,end:op.sourceEnd}];
+          appliedCount++;
+        }
+        break;
+      }
+      case 'MOVE_RANGE': {
+        if (state.trackLocks.video || op.sourceStart === undefined || op.sourceEnd === undefined) break;
+        const moving: TimelineSegment[] = [];
+        const others: TimelineSegment[] = [];
+        for (const seg of segments) {
+          const lo = Math.max(seg.sourceStart, op.sourceStart), hi = Math.min(seg.sourceEnd, op.sourceEnd);
+          if (hi <= lo || seg.locked) { others.push(seg); continue; }
+          if (lo > seg.sourceStart) others.push({...seg,id:nextSegmentId(),sourceEnd:lo});
+          moving.push({...seg,id:nextSegmentId(),sourceStart:lo,sourceEnd:hi});
+          if (hi < seg.sourceEnd) others.push({...seg,id:nextSegmentId(),sourceStart:hi});
+        }
+        if (moving.length && others.length) {
+          segments = op.moveTo === 'start' ? [...moving,...others] : [...others,...moving];
+          appliedCount++;
+        }
+        break;
+      }
       case 'REMOVE_WORD': {
         const targets = op.removeRanges
           ? op.removeRanges
@@ -777,10 +840,6 @@ export function applyEditPlan(
             captions = removeWordFromCaptionEntries(captions, r.start, r.end);
           }
         }
-        captions = captions.map((c) => ({
-          ...c,
-          text: c.text.replace(/\b(um|uh|er|ah|like,)\b/gi, '').replace(/\s{2,}/g, ' ').trim(),
-        }));
         appliedCount += 1;
         break;
       }
@@ -900,9 +959,17 @@ export function applyEditPlan(
       }
       case 'ADD_TEXT_OVERLAY': {
         if (op.overlay && !state.trackLocks.overlays) {
+          const overlay = op.overlay;
+          const sourceRanges = overlay.sourceRanges ?? recalculateTimeline(segments).segments.flatMap(seg => {
+            const lo = Math.max(seg.timelineStart, overlay.timelineStart), hi = Math.min(seg.timelineEnd, overlay.timelineEnd);
+            if (hi <= lo) return [];
+            return [{start:round3(seg.sourceStart + (lo-seg.timelineStart)*seg.speed),
+                     end:round3(seg.sourceStart + (hi-seg.timelineStart)*seg.speed)}];
+          });
           overlays.push({
             id: nextSegmentId('ovl'),
             ...op.overlay,
+            sourceRanges,
           });
           appliedCount += 1;
         }
@@ -1026,6 +1093,7 @@ export function applyEditPlan(
     muteRanges,
     audio,
     activeVersionId,
+    ...(protectedPauses ? {protectedPauses} : {}),
   };
 
   if (!options.ignoreProtection && nextState.segments.length === 0) {

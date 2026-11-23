@@ -19,6 +19,7 @@ import {
 import { ProceduralMusicBed, unlockAudioEngine } from '../lib/audioEngine';
 import { getNarrationPosition } from '../lib/fallbackData';
 import { apiUrl, connectWorker } from '../lib/api';
+import { projectOverlay } from '../shared/renderProjection';
 import { getBundledThumbForDemo, renderDemoCanvasFrame } from '../lib/demoAssets';
 
 interface VirtualVideoPlayerProps {
@@ -127,12 +128,11 @@ export function VirtualVideoPlayer({
     return match?.text || null;
   }, [activeCaption, translatedTrack]);
 
-  const activeOverlays = useMemo(() => {
-    if (!state.trackVisibility.overlays) return [];
-    return state.overlays.filter(
-      (o) => currentTime >= o.timelineStart && currentTime <= o.timelineEnd,
-    );
-  }, [state.overlays, state.trackVisibility.overlays, currentTime]);
+  const overlayWindows = useMemo(() => state.overlays.map(overlay => ({
+    overlay, windows: projectOverlay(state.segments,overlay),
+  })),[state.overlays,state.segments]);
+  const activeOverlays = state.trackVisibility.overlays ? overlayWindows.filter(item =>
+    item.windows.some(w => currentTime>=w.start && currentTime<w.end)).map(item=>item.overlay) : [];
 
   const mapped = useMemo(
     () => mapTimelineTimeToSource(state.segments, currentTime),
@@ -245,25 +245,29 @@ export function VirtualVideoPlayer({
 
   const customMusicUrl = state.audio.musicPreset === 'custom-upload' ? state.audio.customMusicUrl : undefined;
   const musicActive = isPlaying && state.audio.musicEnabled && state.trackVisibility.music && !state.audio.muted;
+  const hasSpokenAudio = mapped && !mapped.segment.muted && state.trackVisibility.audio &&
+    !inMuteRangeNow && !inBleepNow && state.captions.some(cap =>
+      cap.sourceStart <= mapped.sourceTime && mapped.sourceTime < cap.sourceEnd && !cap.customText);
+  const musicGain=state.audio.musicVolume*(state.audio.duckUnderSpeech!==false && hasSpokenAudio ? 0.25 : 1);
   useEffect(() => {
     if (musicActive && state.audio.musicPreset !== 'custom-upload') {
       bedRef.current ??= new ProceduralMusicBed();
-      bedRef.current.update({ active: true, preset: state.audio.musicPreset, volume: volume * state.audio.musicVolume });
+      bedRef.current.update({ active: true, preset: state.audio.musicPreset, volume: volume * musicGain, offset: currentTime + (state.audio.musicStartOffsetSec || 0) });
     } else {
       bedRef.current?.stop();
     }
-  }, [musicActive, volume, state.audio.musicVolume, state.audio.musicPreset]);
+  }, [musicActive, volume, musicGain, state.audio.musicPreset, state.audio.musicStartOffsetSec, currentTime]);
 
   useEffect(() => {
     const music = musicAudioRef.current;
     if (!music) return;
-    music.volume = Math.min(1, state.audio.musicVolume * volume);
+    music.volume = Math.min(1, musicGain * volume);
     music.playbackRate = globalSpeedMult;
     if (Number.isFinite(music.duration) && music.duration > 0) {
       const offset = ((state.audio.musicStartOffsetSec || 0) + currentTime) % music.duration;
       if (Math.abs(music.currentTime - offset) > 0.25) music.currentTime = offset;
     }
-  }, [customMusicUrl, state.audio.musicVolume, volume, globalSpeedMult, state.audio.musicStartOffsetSec, currentTime]);
+  }, [customMusicUrl, musicGain, volume, globalSpeedMult, state.audio.musicStartOffsetSec, currentTime]);
 
   useEffect(() => {
     const music = musicAudioRef.current;
@@ -390,14 +394,15 @@ export function VirtualVideoPlayer({
         ? 'Square'
         : 'Landscape';
 
+  const displayStyle=activeCaption?.styleOverride ? {...state.captionStyle,...activeCaption.styleOverride} : state.captionStyle;
   const captionPosClass =
-    state.captionStyle.position === 'top'
+    displayStyle.position === 'top'
       ? 'top-4'
-      : state.captionStyle.position === 'center'
+      : displayStyle.position === 'center'
         ? 'top-1/2 -translate-y-1/2'
         : 'bottom-4';
 
-  const captionOpacity = state.captionStyle.backgroundOpacity ?? 0.78;
+  const captionOpacity = displayStyle.backgroundOpacity ?? 0.78;
   const captionBg = `rgba(5, 7, 17, ${Math.max(0, Math.min(0.96, captionOpacity))})`;
 
   return (
@@ -528,9 +533,9 @@ export function VirtualVideoPlayer({
                 data-testid="live-caption-preview"
                 style={{
                   backgroundColor: captionBg,
-                  fontFamily: state.captionStyle.fontFamily,
-                  fontSize: `${Math.max(12, Math.round(state.captionStyle.fontSize * 0.72))}px`,
-                  color: state.captionStyle.color,
+                  fontFamily: displayStyle.fontFamily,
+                  fontSize: `${Math.max(12, Math.round(displayStyle.fontSize * 0.72))}px`,
+                  color: displayStyle.color,
                 }}
                 className="max-w-[92%] rounded-xl px-3.5 py-2 text-center font-semibold leading-snug border border-white/10"
               >
@@ -540,7 +545,7 @@ export function VirtualVideoPlayer({
                   <span className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5">
                     {activeCaption.words.map((w) => {
                       const isWordActive =
-                        state.captionStyle.highlightActiveWord &&
+                        displayStyle.highlightActiveWord &&
                         currentTime >= w.timelineStart &&
                         currentTime <= w.timelineEnd;
                       return (
@@ -548,7 +553,7 @@ export function VirtualVideoPlayer({
                           key={w.id}
                           style={
                             isWordActive
-                              ? { color: state.captionStyle.highlightColor }
+                              ? { color: displayStyle.highlightColor }
                               : undefined
                           }
                           className={isWordActive ? 'underline decoration-2' : undefined}

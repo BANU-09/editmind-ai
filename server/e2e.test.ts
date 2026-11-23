@@ -6,7 +6,7 @@ import path from 'path';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.EDITMIND_TEST_BASE || 'http://127.0.0.1:3000';
 const GUEST_ID = `test-guest-${Date.now()}`;
 
 async function waitForServer(timeoutMs = 30000) {
@@ -95,7 +95,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.notEqual(keynoteProj.versions[0].durationSec, keynoteProj.versions[2].durationSec);
 
   // 3. Generate a distinct synthetic user video (6s, unique resolution 640x360) & upload it
-  const tmpUpload = path.resolve(process.cwd(), 'storage', 'test_user_upload.mp4');
+  const tmpUpload = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_user_upload.mp4');
   await execFileAsync('ffmpeg', [
     '-y',
     '-f',
@@ -189,7 +189,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.ok(dlBytes.byteLength > 1024);
 
   // 5. CRITICAL HONESTY CHECK: No-audio uploaded video must report 'no-audio' and empty transcript (ZERO fake text!)
-  const tmpSilent = path.resolve(process.cwd(), 'storage', 'test_silent_upload.mp4');
+  const tmpSilent = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_silent_upload.mp4');
   await execFileAsync('ffmpeg', [
     '-y',
     '-f',
@@ -232,7 +232,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.equal(reanalyzeData.analysis.transcriptionStatus, 'no-audio');
 
   // 6. CRITICAL ORIENTATION CHECK: Portrait 9:16 (720x1280) video + Custom WAV Music Upload + Word-mode Export
-  const tmpPortrait = path.resolve(process.cwd(), 'storage', 'test_portrait_upload.mp4');
+  const tmpPortrait = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_portrait_upload.mp4');
   await execFileAsync('ffmpeg', [
     '-y',
     '-f',
@@ -269,7 +269,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.equal(portraitProj.media.height, 1280);
 
   // Upload real custom WAV music track
-  const tmpMusic = path.resolve(process.cwd(), 'storage', 'test_bgm.wav');
+  const tmpMusic = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_bgm.wav');
   await execFileAsync('ffmpeg', [
     '-y',
     '-f',
@@ -333,7 +333,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   // Verify portrait exported MP4 dimensions with ffprobe!
   const dlPortraitRes = await fetch(`${BASE_URL}${pJobFinal.outputUrl}`);
   assert.equal(dlPortraitRes.status, 200);
-  const tmpExportCheck = path.resolve(process.cwd(), 'storage', 'test_portrait_out.mp4');
+  const tmpExportCheck = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_portrait_out.mp4');
   fs.writeFileSync(tmpExportCheck, Buffer.from(await dlPortraitRes.arrayBuffer()));
   const { stdout: probeOut } = await execFileAsync('ffprobe', [
     '-v',

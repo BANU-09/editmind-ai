@@ -1,0 +1,869 @@
+openapi: 3.1.0
+info:
+  title: EditMind integration API
+  version: 1.0.0
+  description: All resource routes are isolated to a guest capability or account. Generate a long unpredictable
+    guest ID and retain it privately. Successful writes include Idempotency-Replayed. Resource responses
+    include X-Correlation-Id. Root /health and /ready are also available. Browser compatibility routes
+    use the unversioned /api prefix.
+servers:
+- url: /api/v1
+security:
+- guest: []
+- bearer: []
+paths:
+  /openapi.yaml:
+    get:
+      operationId: getSpecification
+      summary: Read this OpenAPI contract
+      security: []
+      responses:
+        '200':
+          description: OpenAPI 3.1 YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /health:
+    get:
+      operationId: health
+      summary: Check HTTP process liveness
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - ok
+        default:
+          $ref: '#/components/responses/Failure'
+      security: []
+  /ready:
+    get:
+      operationId: readiness
+      summary: Check database and configured object store
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - status
+                - storage
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - ready
+                  storage:
+                    type: string
+                    enum:
+                    - filesystem
+                    - s3
+        default:
+          $ref: '#/components/responses/Failure'
+      security: []
+  /media/ingest:
+    post:
+      operationId: ingest
+      summary: Upload a source and start analysis
+      description: The streamed upload is capped at MAX_UPLOAD_BYTES. For multipart forms, vocabulary
+        accepts a JSON string array or comma-separated words. Identical retries hash the uploaded bytes.
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - video
+              properties:
+                video:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                languageOverride:
+                  type: string
+                audioStreamIndex:
+                  type: integer
+                  minimum: 0
+                vocabulary:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 200
+                callback_url:
+                  type: string
+                  format: uri
+                  description: Optional exact allowlisted HTTPS destination. Receives the job status as
+                    JSON. The X-IncuBrix-Signature header equals sha256= followed by hex HMAC-SHA256 of
+                    the raw bytes using CALLBACK_HMAC_SECRET.
+                rights:
+                  type: string
+                  maxLength: 500
+                  description: Uploader's stated licence or source rights.
+                ai_generated:
+                  type: boolean
+                  description: Uploader's disclosure for this source.
+      responses:
+        '202':
+          description: Job accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        default:
+          $ref: '#/components/responses/Failure'
+  /media/import-url:
+    post:
+      operationId: importUrl
+      summary: Import a remote source and wait for analysis in the same job
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                title:
+                  type: string
+                languageOverride:
+                  type: string
+                vocabulary:
+                  type: array
+                  items:
+                    type: string
+                callback_url:
+                  type: string
+                  format: uri
+                  description: Optional exact allowlisted HTTPS destination. Receives the job status as
+                    JSON. The X-IncuBrix-Signature header equals sha256= followed by hex HMAC-SHA256 of
+                    the raw bytes using CALLBACK_HMAC_SECRET.
+                rights:
+                  type: string
+                  maxLength: 500
+                  description: Uploader's stated licence or source rights.
+                ai_generated:
+                  type: boolean
+                  description: Uploader's disclosure for this source.
+      responses:
+        '202':
+          description: Job accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        default:
+          $ref: '#/components/responses/Failure'
+  /projects/{id}:
+    get:
+      operationId: getProject
+      summary: Read project media analysis
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Failure'
+  /projects/{id}/source:
+    get:
+      operationId: getSource
+      summary: Download the original project video
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            video/*:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Failure'
+  /projects/{id}/retranscribe:
+    post:
+      operationId: retranscribe
+      summary: Re-analyze the original project media
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required: []
+              properties:
+                languageOverride:
+                  type: string
+                audioStreamIndex:
+                  type: integer
+                  minimum: 0
+                vocabulary:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 200
+                callback_url:
+                  type: string
+                  format: uri
+                  description: Optional exact allowlisted HTTPS destination. Receives the job status as
+                    JSON. The X-IncuBrix-Signature header equals sha256= followed by hex HMAC-SHA256 of
+                    the raw bytes using CALLBACK_HMAC_SECRET.
+                rights:
+                  type: string
+                  maxLength: 500
+                  description: Uploader's stated licence or source rights.
+                ai_generated:
+                  type: boolean
+                  description: Uploader's disclosure for this source.
+      responses:
+        '202':
+          description: Job accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        default:
+          $ref: '#/components/responses/Failure'
+  /projects/{id}/exports:
+    post:
+      operationId: exportProject
+      summary: Render the saved project timeline
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Render'
+      responses:
+        '202':
+          description: Job accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        default:
+          $ref: '#/components/responses/Failure'
+  /projects/{id}/sessions:
+    post:
+      operationId: startSession
+      summary: Start a durable branch of the saved project
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required: []
+              properties: {}
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Failure'
+  /sessions/{sid}:
+    get:
+      operationId: getSession
+      summary: Read session timeline and ordered responses
+      parameters:
+      - name: sid
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionWithTimeline'
+        default:
+          $ref: '#/components/responses/Failure'
+  /sessions/{sid}/steps:
+    post:
+      operationId: edit
+      summary: Apply one prompt or clarification answer
+      description: Clarification and rejected instructions return HTTP 200 with a typed status. A RENDER
+        operation asks the caller to submit the current timeline to the render endpoint.
+      parameters:
+      - name: sid
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - say
+              properties:
+                say:
+                  type: string
+                  minLength: 1
+                  maxLength: 8000
+                expected_hash:
+                  type: string
+                  description: Optional optimistic concurrency guard. A mismatch returns TIMELINE_CONFLICT.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Step'
+        default:
+          $ref: '#/components/responses/Failure'
+  /sessions/{sid}/timeline.otio:
+    get:
+      operationId: getOtio
+      summary: Export the session as OpenTimelineIO JSON
+      parameters:
+      - name: sid
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - OTIO_SCHEMA
+                properties:
+                  OTIO_SCHEMA:
+                    type: string
+        default:
+          $ref: '#/components/responses/Failure'
+  /sessions/{sid}/render:
+    post:
+      operationId: renderSession
+      summary: Queue a render of the current session snapshot
+      parameters:
+      - name: sid
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Idempotency'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Render'
+      responses:
+        '202':
+          description: Job accepted for asynchronous processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        default:
+          $ref: '#/components/responses/Failure'
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      summary: Poll job state, progress and result links
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        default:
+          $ref: '#/components/responses/Failure'
+  /jobs/{id}/manifest:
+    get:
+      operationId: getManifest
+      summary: Read the completed job's provenance and cost manifest
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manifest'
+        default:
+          $ref: '#/components/responses/Failure'
+  /jobs/{id}/download:
+    get:
+      operationId: downloadExport
+      summary: Download the completed rendered MP4
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Resource ID returned by the service.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: Success
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Failure'
+components:
+  securitySchemes:
+    guest:
+      type: apiKey
+      in: header
+      name: x-guest-id
+      description: 8 to 256 characters, use a random UUID.
+    bearer:
+      type: http
+      scheme: bearer
+      description: Valid EditMind account session token.
+  parameters:
+    Correlation:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Optional trace identifier returned in the response and written to structured logs.
+      schema:
+        type: string
+    Idempotency:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Optional, up to 180 characters. Identical requests share the original result per owner
+        and path. Reusing the key for different input returns 409.
+      schema:
+        type: string
+  responses:
+    Failure:
+      description: Structured errors. HTTP 400 INVALID_REQUEST or CALLBACK_NOT_ALLOWED, 401 AUTH_REQUIRED,
+        404 NOT_FOUND, 409 IDEMPOTENCY_CONFLICT, TIMELINE_CONFLICT or JOB_PENDING, 413 PAYLOAD_TOO_LARGE,
+        429 TOO_MANY_REQUESTS, 500 INTERNAL_ERROR, 503 UNAVAILABLE. Completed failed jobs report JOB_FAILED
+        through their status resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - retryable
+          - details
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            retryable:
+              type: boolean
+            details:
+              type: object
+              additionalProperties: true
+    Ticket:
+      type: object
+      required:
+      - job_id
+      - status
+      - links
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - queued
+        links:
+          type: object
+          required:
+          - job
+          properties:
+            job:
+              type: string
+    Job:
+      type: object
+      required:
+      - job_id
+      - kind
+      - status
+      - progress
+      - project_id
+      - result_links
+      - error
+      - callback_status
+      properties:
+        job_id:
+          type: string
+        kind:
+          type: string
+          enum:
+          - ingest
+          - import_url
+          - retranscribe
+          - export
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        project_id:
+          type:
+          - string
+          - 'null'
+        result_links:
+          type: object
+          required: []
+          properties:
+            manifest:
+              type: string
+            project:
+              type: string
+            download:
+              type: string
+        error:
+          anyOf:
+          - type: object
+            required:
+            - code
+            - message
+            - retryable
+            - details
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              retryable:
+                type: boolean
+              details:
+                type: object
+                additionalProperties: true
+          - type: 'null'
+        callback_status:
+          enum:
+          - null
+          - pending
+          - failed
+          - delivered
+    Session:
+      type: object
+      required:
+      - session_id
+      - project_id
+      - timeline_hash
+      - duration_s
+      properties:
+        session_id:
+          type: string
+        project_id:
+          type: string
+        timeline_hash:
+          type: string
+        duration_s:
+          type: number
+    SessionWithTimeline:
+      type: object
+      required:
+      - session_id
+      - project_id
+      - timeline_hash
+      - duration_s
+      - timeline
+      - history
+      properties:
+        session_id:
+          type: string
+        project_id:
+          type: string
+        timeline_hash:
+          type: string
+        duration_s:
+          type: number
+        timeline:
+          type: object
+          additionalProperties: true
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+    Step:
+      type: object
+      required:
+      - status
+      - code
+      - operations
+      - summary
+      - question
+      - options
+      - duration_s
+      - before_duration_s
+      - timeline_hash
+      - time_policy
+      - warnings
+      properties:
+        status:
+          type: string
+          enum:
+          - applied
+          - needs_clarification
+          - rejected
+        code:
+          type: string
+        operations:
+          type: array
+          items:
+            type: object
+            required:
+            - type
+            properties:
+              type:
+                type: string
+            additionalProperties: true
+        summary:
+          type: string
+        question:
+          type:
+          - string
+          - 'null'
+        options:
+          type: array
+          items:
+            type: string
+        duration_s:
+          type: number
+        before_duration_s:
+          type: number
+        timeline_hash:
+          type: string
+        time_policy:
+          type: string
+          enum:
+          - original_source_seconds
+        warnings:
+          type: array
+          items:
+            type: string
+    Manifest:
+      type: object
+      required:
+      - job_id
+      - kind
+      - project_id
+      - session_id
+      - models
+      - versions
+      - settings
+      - seed
+      - deterministic_editor
+      - timings
+      - cost
+      - rights
+      - warnings
+      properties:
+        job_id:
+          type: string
+        kind:
+          type: string
+        project_id:
+          type:
+          - string
+          - 'null'
+        session_id:
+          type:
+          - string
+          - 'null'
+        models:
+          type: object
+          additionalProperties: true
+        versions:
+          type: object
+          additionalProperties: true
+        settings:
+          type: object
+          additionalProperties: true
+        seed:
+          type: 'null'
+        deterministic_editor:
+          type: boolean
+        timings:
+          type: object
+          additionalProperties: true
+        cost:
+          type: object
+          additionalProperties: true
+        rights:
+          type: object
+          additionalProperties: true
+        warnings:
+          type: array
+          items:
+            type: string
+    Render:
+      type: object
+      required: []
+      properties:
+        callback_url:
+          type: string
+          format: uri
+          description: Optional exact allowlisted HTTPS destination. Receives the job status as JSON.
+            The X-IncuBrix-Signature header equals sha256= followed by hex HMAC-SHA256 of the raw bytes
+            using CALLBACK_HMAC_SECRET.
+        rights:
+          type: string
+          maxLength: 500
+          description: Uploader's stated licence or source rights.
+        ai_generated:
+          type: boolean
+          description: Uploader's disclosure for this source.
+        resolution:
+          type: string
+          enum:
+          - 480p
+          - 720p
+          - 1080p
+        quality:
+          type: string
+          enum:
+          - fast
+          - balanced
+          - high
+    Project:
+      type: object
+      required:
+      - project
+      properties:
+        project:
+          type: object
+          required:
+          - id
+          - title
+          - media_id
+          - duration_s
+          - analysis
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            media_id:
+              type: string
+            duration_s:
+              type: number
+            analysis:
+              type: object
+              additionalProperties: true

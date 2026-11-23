@@ -1,0 +1,2546 @@
+[
+  {
+    "name": "@aws-sdk/checksums",
+    "version": "3.1002.6",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/checksums/-/checksums-3.1002.6.tgz"
+  },
+  {
+    "name": "@aws-sdk/client-s3",
+    "version": "3.1175.0",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/client-s3/-/client-s3-3.1175.0.tgz"
+  },
+  {
+    "name": "@aws-sdk/core",
+    "version": "3.981.1",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/core/-/core-3.981.1.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-env",
+    "version": "3.972.85",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-env/-/credential-provider-env-3.972.85.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-http",
+    "version": "3.972.87",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-http/-/credential-provider-http-3.972.87.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-ini",
+    "version": "3.973.31",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-ini/-/credential-provider-ini-3.973.31.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-login",
+    "version": "3.972.93",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-login/-/credential-provider-login-3.972.93.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-node",
+    "version": "3.972.98",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-node/-/credential-provider-node-3.972.98.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-process",
+    "version": "3.972.85",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-process/-/credential-provider-process-3.972.85.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-sso",
+    "version": "3.973.29",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-sso/-/credential-provider-sso-3.973.29.tgz"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-web-identity",
+    "version": "3.972.91",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/credential-provider-web-identity/-/credential-provider-web-identity-3.972.91.tgz"
+  },
+  {
+    "name": "@aws-sdk/middleware-sdk-s3",
+    "version": "3.972.91",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/middleware-sdk-s3/-/middleware-sdk-s3-3.972.91.tgz"
+  },
+  {
+    "name": "@aws-sdk/nested-clients",
+    "version": "3.998.4",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/nested-clients/-/nested-clients-3.998.4.tgz"
+  },
+  {
+    "name": "@aws-sdk/signature-v4-multi-region",
+    "version": "3.996.52",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/signature-v4-multi-region/-/signature-v4-multi-region-3.996.52.tgz"
+  },
+  {
+    "name": "@aws-sdk/token-providers",
+    "version": "3.1175.0",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/token-providers/-/token-providers-3.1175.0.tgz"
+  },
+  {
+    "name": "@aws-sdk/types",
+    "version": "3.975.1",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/types/-/types-3.975.1.tgz"
+  },
+  {
+    "name": "@aws-sdk/xml-builder",
+    "version": "3.972.43",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws-sdk/xml-builder/-/xml-builder-3.972.43.tgz"
+  },
+  {
+    "name": "@aws/lambda-invoke-store",
+    "version": "0.3.0",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@aws/lambda-invoke-store/-/lambda-invoke-store-0.3.0.tgz"
+  },
+  {
+    "name": "@dimforge/rapier3d-compat",
+    "version": "0.12.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@emnapi/core",
+    "version": "2.0.0-beta.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@emnapi/core/-/core-2.0.0-beta.2.tgz"
+  },
+  {
+    "name": "@emnapi/runtime",
+    "version": "2.0.0-beta.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-2.0.0-beta.2.tgz"
+  },
+  {
+    "name": "@emnapi/wasi-threads",
+    "version": "2.2.0",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@emnapi/wasi-threads/-/wasi-threads-2.2.0.tgz"
+  },
+  {
+    "name": "@esbuild/aix-ppc64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/android-arm",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/android-arm/-/android-arm-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/android-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/android-arm64/-/android-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/android-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/android-x64/-/android-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/darwin-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/darwin-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/darwin-x64/-/darwin-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/freebsd-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/freebsd-arm64/-/freebsd-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/freebsd-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/freebsd-x64/-/freebsd-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-arm",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-arm/-/linux-arm-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-ia32",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-ia32/-/linux-ia32-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-loong64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-loong64/-/linux-loong64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-mips64el",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-mips64el/-/linux-mips64el-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-ppc64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-ppc64/-/linux-ppc64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-riscv64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-riscv64/-/linux-riscv64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-s390x",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-s390x/-/linux-s390x-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/linux-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/netbsd-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/netbsd-arm64/-/netbsd-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/netbsd-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/openbsd-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/openbsd-arm64/-/openbsd-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/openbsd-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/openharmony-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/openharmony-arm64/-/openharmony-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/sunos-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/win32-arm64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/win32-arm64/-/win32-arm64-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/win32-ia32",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@esbuild/win32-ia32/-/win32-ia32-0.28.2.tgz"
+  },
+  {
+    "name": "@esbuild/win32-x64",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@google/genai",
+    "version": "3.6.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@huggingface/jinja",
+    "version": "0.5.13",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@huggingface/tokenizers",
+    "version": "0.2.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@huggingface/transformers",
+    "version": "4.3.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@img/colour",
+    "version": "1.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@img/sharp-darwin-arm64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-darwin-x64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-freebsd-wasm32",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-darwin-arm64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-darwin-x64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-arm",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-arm64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-ppc64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-riscv64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-s390x",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-x64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linuxmusl-arm64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-libvips-linuxmusl-x64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.4.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-arm",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-arm64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-ppc64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-riscv64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-s390x",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linux-x64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linuxmusl-arm64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-linuxmusl-x64",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-wasm32",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+    "source": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.5.tgz"
+  },
+  {
+    "name": "@emnapi/runtime",
+    "version": "1.11.3",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz"
+  },
+  {
+    "name": "@img/sharp-webcontainers-wasm32",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-win32-arm64",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-win32-ia32",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later",
+    "source": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.5.tgz"
+  },
+  {
+    "name": "@img/sharp-win32-x64",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later",
+    "source": null
+  },
+  {
+    "name": "@jridgewell/gen-mapping",
+    "version": "0.3.13",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@jridgewell/remapping",
+    "version": "2.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@jridgewell/resolve-uri",
+    "version": "3.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@jridgewell/sourcemap-codec",
+    "version": "1.6.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@jridgewell/trace-mapping",
+    "version": "0.3.31",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@napi-rs/wasm-runtime",
+    "version": "1.2.6",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-1.2.6.tgz"
+  },
+  {
+    "name": "@oxc-project/types",
+    "version": "0.156.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/aspromise",
+    "version": "1.1.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/base64",
+    "version": "1.1.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/codegen",
+    "version": "2.0.5",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/eventemitter",
+    "version": "1.1.1",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/fetch",
+    "version": "1.1.1",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/float",
+    "version": "1.0.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/path",
+    "version": "1.1.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/pool",
+    "version": "1.1.0",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@protobufjs/utf8",
+    "version": "1.1.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "@rolldown/binding-android-arm-eabi",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-android-arm-eabi/-/binding-android-arm-eabi-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-android-arm64",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-android-arm64/-/binding-android-arm64-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-darwin-arm64",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-darwin-arm64/-/binding-darwin-arm64-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-darwin-x64",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-darwin-x64/-/binding-darwin-x64-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-freebsd-x64",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-freebsd-x64/-/binding-freebsd-x64-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-arm-gnueabihf",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-arm-gnueabihf/-/binding-linux-arm-gnueabihf-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-arm64-gnu",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-arm64-gnu/-/binding-linux-arm64-gnu-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-arm64-musl",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-arm64-musl/-/binding-linux-arm64-musl-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-ppc64-gnu",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-ppc64-gnu/-/binding-linux-ppc64-gnu-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-s390x-gnu",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-s390x-gnu/-/binding-linux-s390x-gnu-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-x64-gnu",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-linux-x64-musl",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-linux-x64-musl/-/binding-linux-x64-musl-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-openharmony-arm64",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-openharmony-arm64/-/binding-openharmony-arm64-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-wasm32-wasi",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-wasm32-wasi/-/binding-wasm32-wasi-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-win32-arm64-msvc",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@rolldown/binding-win32-arm64-msvc/-/binding-win32-arm64-msvc-1.2.19.tgz"
+  },
+  {
+    "name": "@rolldown/binding-win32-x64-msvc",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@rolldown/pluginutils",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@smithy/core",
+    "version": "3.41.1",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/core/-/core-3.41.1.tgz"
+  },
+  {
+    "name": "@smithy/credential-provider-imds",
+    "version": "4.5.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/credential-provider-imds/-/credential-provider-imds-4.5.2.tgz"
+  },
+  {
+    "name": "@smithy/fetch-http-handler",
+    "version": "5.8.1",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/fetch-http-handler/-/fetch-http-handler-5.8.1.tgz"
+  },
+  {
+    "name": "@smithy/node-http-handler",
+    "version": "4.14.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/node-http-handler/-/node-http-handler-4.14.2.tgz"
+  },
+  {
+    "name": "@smithy/signature-v4",
+    "version": "5.7.5",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/signature-v4/-/signature-v4-5.7.5.tgz"
+  },
+  {
+    "name": "@smithy/types",
+    "version": "4.20.0",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@smithy/types/-/types-4.20.0.tgz"
+  },
+  {
+    "name": "@tailwindcss/node",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tailwindcss/oxide",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tailwindcss/oxide-android-arm64",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-android-arm64/-/oxide-android-arm64-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-darwin-arm64",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-darwin-arm64/-/oxide-darwin-arm64-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-darwin-x64",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-darwin-x64/-/oxide-darwin-x64-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-freebsd-x64",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-freebsd-x64/-/oxide-freebsd-x64-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-linux-arm-gnueabihf",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-linux-arm-gnueabihf/-/oxide-linux-arm-gnueabihf-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-linux-arm64-gnu",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-linux-arm64-gnu/-/oxide-linux-arm64-gnu-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-linux-arm64-musl",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-linux-arm64-musl/-/oxide-linux-arm64-musl-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-linux-x64-gnu",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-linux-x64-gnu/-/oxide-linux-x64-gnu-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-linux-x64-musl",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-linux-x64-musl/-/oxide-linux-x64-musl-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-wasm32-wasi",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@emnapi/core",
+    "version": "1.11.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@emnapi/runtime",
+    "version": "1.11.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@emnapi/wasi-threads",
+    "version": "1.2.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@napi-rs/wasm-runtime",
+    "version": "1.2.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tybys/wasm-util",
+    "version": "0.10.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tslib",
+    "version": "2.8.1",
+    "license": "0BSD",
+    "source": null
+  },
+  {
+    "name": "@tailwindcss/oxide-win32-arm64-msvc",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tailwindcss/oxide-win32-arm64-msvc/-/oxide-win32-arm64-msvc-4.3.5.tgz"
+  },
+  {
+    "name": "@tailwindcss/oxide-win32-x64-msvc",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tailwindcss/vite",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tweenjs/tween.js",
+    "version": "23.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@tybys/wasm-util",
+    "version": "0.10.5",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/@tybys/wasm-util/-/wasm-util-0.10.5.tgz"
+  },
+  {
+    "name": "@types/bcryptjs",
+    "version": "2.4.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/better-sqlite3",
+    "version": "9.6.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/body-parser",
+    "version": "1.19.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/connect",
+    "version": "3.4.38",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/express",
+    "version": "4.17.25",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/express-serve-static-core",
+    "version": "4.19.9",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/http-errors",
+    "version": "2.0.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/mime",
+    "version": "1.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/multer",
+    "version": "2.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/node",
+    "version": "22.20.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/qs",
+    "version": "6.15.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/range-parser",
+    "version": "1.2.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/react",
+    "version": "19.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/react-dom",
+    "version": "19.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/retry",
+    "version": "0.12.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/send",
+    "version": "1.2.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/serve-static",
+    "version": "1.15.10",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/send",
+    "version": "0.17.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/stats.js",
+    "version": "0.17.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/three",
+    "version": "0.187.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/uuid",
+    "version": "10.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@types/webxr",
+    "version": "0.5.24",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@typescript/typescript-aix-ppc64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-aix-ppc64/-/typescript-aix-ppc64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-darwin-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-darwin-arm64/-/typescript-darwin-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-darwin-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-darwin-x64/-/typescript-darwin-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-freebsd-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-freebsd-arm64/-/typescript-freebsd-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-freebsd-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-freebsd-x64/-/typescript-freebsd-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-arm",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-arm/-/typescript-linux-arm-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-arm64/-/typescript-linux-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-loong64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-loong64/-/typescript-linux-loong64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-mips64el",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-mips64el/-/typescript-linux-mips64el-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-ppc64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-ppc64/-/typescript-linux-ppc64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-riscv64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-riscv64/-/typescript-linux-riscv64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-s390x",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-s390x/-/typescript-linux-s390x-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-linux-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-netbsd-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-netbsd-arm64/-/typescript-netbsd-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-netbsd-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-netbsd-x64/-/typescript-netbsd-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-openbsd-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-openbsd-arm64/-/typescript-openbsd-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-openbsd-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-openbsd-x64/-/typescript-openbsd-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-sunos-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-sunos-x64/-/typescript-sunos-x64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-win32-arm64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": "https://registry.npmjs.org/@typescript/typescript-win32-arm64/-/typescript-win32-arm64-7.0.2.tgz"
+  },
+  {
+    "name": "@typescript/typescript-win32-x64",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/blob",
+    "version": "2.9.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/cli-config",
+    "version": "0.3.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/cli-exec",
+    "version": "1.0.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/detect-agent",
+    "version": "1.2.5",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/drives",
+    "version": "1.0.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/cli-config",
+    "version": "0.4.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/detect-agent",
+    "version": "1.2.7",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/oidc",
+    "version": "4.0.9",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "ms",
+    "version": "2.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "undici",
+    "version": "8.13.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "xdg-app-paths",
+    "version": "5.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "zod",
+    "version": "4.6.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@vercel/oidc",
+    "version": "3.8.10",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/sandbox",
+    "version": "4.1.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "@vercel/oidc",
+    "version": "4.0.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "jose",
+    "version": "5.10.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "jose",
+    "version": "6.2.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "ms",
+    "version": "2.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "undici",
+    "version": "8.13.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "xdg-app-paths",
+    "version": "5.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "zod",
+    "version": "4.6.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@vitejs/plugin-react",
+    "version": "6.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "@workflow/serde",
+    "version": "4.1.0-beta.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "accepts",
+    "version": "1.3.8",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "adm-zip",
+    "version": "0.6.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "agent-base",
+    "version": "7.1.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "append-field",
+    "version": "1.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "array-flatten",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "async-retry",
+    "version": "1.3.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "autoprefixer",
+    "version": "10.7.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "b4a",
+    "version": "1.9.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "bare-events",
+    "version": "2.9.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "base64-js",
+    "version": "1.5.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "baseline-browser-mapping",
+    "version": "2.11.39",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "bcryptjs",
+    "version": "3.0.3",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "better-sqlite3",
+    "version": "13.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "bignumber.js",
+    "version": "9.3.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "body-parser",
+    "version": "1.20.9",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "bowser",
+    "version": "2.15.1",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/bowser/-/bowser-2.15.1.tgz"
+  },
+  {
+    "name": "browserslist",
+    "version": "4.29.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "buffer-equal-constant-time",
+    "version": "1.0.1",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "busboy",
+    "version": "1.6.0",
+    "license": "See package notice",
+    "source": null
+  },
+  {
+    "name": "bytes",
+    "version": "3.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "call-bind-apply-helpers",
+    "version": "1.0.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "call-bound",
+    "version": "1.0.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "caniuse-lite",
+    "version": "1.0.30001826",
+    "license": "CC-BY-4.0",
+    "source": null
+  },
+  {
+    "name": "content-disposition",
+    "version": "0.5.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "content-type",
+    "version": "1.0.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "cookie",
+    "version": "0.7.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "cookie-signature",
+    "version": "1.0.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "cross-spawn",
+    "version": "7.0.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "csstype",
+    "version": "3.2.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "data-uri-to-buffer",
+    "version": "4.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "debug",
+    "version": "2.6.9",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "define-data-property",
+    "version": "1.1.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "define-properties",
+    "version": "1.2.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "depd",
+    "version": "2.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "destroy",
+    "version": "1.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "detect-libc",
+    "version": "2.1.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "dotenv",
+    "version": "17.4.2",
+    "license": "BSD-2-Clause",
+    "source": null
+  },
+  {
+    "name": "dunder-proto",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "ecdsa-sig-formatter",
+    "version": "1.0.11",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "ee-first",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "electron-to-chromium",
+    "version": "1.5.492",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "encodeurl",
+    "version": "2.0.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "enhanced-resolve",
+    "version": "5.27.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "es-define-property",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "es-errors",
+    "version": "1.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "es-object-atoms",
+    "version": "1.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "esbuild",
+    "version": "0.28.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "escalade",
+    "version": "3.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "escape-html",
+    "version": "1.0.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "escape-string-regexp",
+    "version": "4.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "etag",
+    "version": "1.8.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "events-universal",
+    "version": "1.0.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "execa",
+    "version": "5.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "express",
+    "version": "4.22.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "extend",
+    "version": "3.0.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fast-fifo",
+    "version": "1.3.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fdir",
+    "version": "6.5.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fetch-blob",
+    "version": "3.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fflate",
+    "version": "0.8.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "finalhandler",
+    "version": "1.3.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "flatbuffers",
+    "version": "25.9.23",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "formdata-polyfill",
+    "version": "4.0.10",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "forwarded",
+    "version": "0.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fraction.js",
+    "version": "5.3.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "framer-motion",
+    "version": "12.43.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fresh",
+    "version": "0.5.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "fsevents",
+    "version": "2.3.3",
+    "license": "MIT",
+    "source": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz"
+  },
+  {
+    "name": "function-bind",
+    "version": "1.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "gaxios",
+    "version": "7.3.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "gcp-metadata",
+    "version": "8.1.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "get-intrinsic",
+    "version": "1.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "get-proto",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "get-stream",
+    "version": "6.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "global-agent",
+    "version": "4.1.7",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "globalthis",
+    "version": "1.0.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "google-auth-library",
+    "version": "10.9.1",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "google-logging-utils",
+    "version": "1.1.3",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "gopd",
+    "version": "1.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "graceful-fs",
+    "version": "4.2.12",
+    "license": "BlueOak-1.0.0",
+    "source": null
+  },
+  {
+    "name": "guid-typescript",
+    "version": "1.0.9",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "has-property-descriptors",
+    "version": "1.0.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "has-symbols",
+    "version": "1.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "hasown",
+    "version": "2.0.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "http-errors",
+    "version": "2.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "https-proxy-agent",
+    "version": "7.0.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "debug",
+    "version": "4.4.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "ms",
+    "version": "2.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "human-signals",
+    "version": "2.1.0",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "iconv-lite",
+    "version": "0.4.24",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "inherits",
+    "version": "2.0.4",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "ipaddr.js",
+    "version": "1.9.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "is-buffer",
+    "version": "2.0.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "is-node-process",
+    "version": "1.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "is-stream",
+    "version": "2.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "isexe",
+    "version": "2.0.0",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "jiti",
+    "version": "2.7.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "jose",
+    "version": "5.10.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "json-bigint",
+    "version": "1.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "jsonlines",
+    "version": "0.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "jwa",
+    "version": "2.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "jws",
+    "version": "4.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "lightningcss",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": null
+  },
+  {
+    "name": "lightningcss-android-arm64",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-android-arm64/-/lightningcss-android-arm64-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-darwin-arm64",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-darwin-arm64/-/lightningcss-darwin-arm64-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-darwin-x64",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-darwin-x64/-/lightningcss-darwin-x64-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-freebsd-x64",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-freebsd-x64/-/lightningcss-freebsd-x64-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-linux-arm-gnueabihf",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-linux-arm-gnueabihf/-/lightningcss-linux-arm-gnueabihf-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-linux-arm64-gnu",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-linux-arm64-gnu/-/lightningcss-linux-arm64-gnu-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-linux-arm64-musl",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-linux-arm64-musl/-/lightningcss-linux-arm64-musl-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-linux-x64-gnu",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-linux-x64-gnu/-/lightningcss-linux-x64-gnu-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-linux-x64-musl",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-linux-x64-musl/-/lightningcss-linux-x64-musl-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-win32-arm64-msvc",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": "https://registry.npmjs.org/lightningcss-win32-arm64-msvc/-/lightningcss-win32-arm64-msvc-1.33.0.tgz"
+  },
+  {
+    "name": "lightningcss-win32-x64-msvc",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "source": null
+  },
+  {
+    "name": "long",
+    "version": "5.3.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "lru-cache",
+    "version": "10.4.3",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "lucide-react",
+    "version": "0.546.0",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "magic-string",
+    "version": "1.4.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "matcher",
+    "version": "4.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "math-intrinsics",
+    "version": "1.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "media-typer",
+    "version": "0.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "merge-descriptors",
+    "version": "1.0.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "merge-stream",
+    "version": "2.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "meshoptimizer",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "methods",
+    "version": "1.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "mime",
+    "version": "1.6.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "mime-db",
+    "version": "1.52.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "mime-types",
+    "version": "2.1.35",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "mimic-fn",
+    "version": "2.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "motion",
+    "version": "12.43.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "motion-dom",
+    "version": "12.43.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "motion-utils",
+    "version": "12.39.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "ms",
+    "version": "2.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "multer",
+    "version": "2.5.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "nanoid",
+    "version": "3.3.20",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "negotiator",
+    "version": "0.6.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "node-addon-api",
+    "version": "8.9.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "node-domexception",
+    "version": "1.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "node-fetch",
+    "version": "3.3.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "node-releases",
+    "version": "2.0.65",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "npm-run-path",
+    "version": "4.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "object-inspect",
+    "version": "1.14.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "object-keys",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "on-finished",
+    "version": "2.4.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "onetime",
+    "version": "5.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "onnxruntime-common",
+    "version": "1.30.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "onnxruntime-node",
+    "version": "1.30.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "onnxruntime-web",
+    "version": "1.31.0-dev.20260914-8d85527a0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "onnxruntime-common",
+    "version": "1.31.0-dev.20260911-2a43ec07e",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "os-paths",
+    "version": "4.4.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "p-retry",
+    "version": "4.6.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "parseurl",
+    "version": "1.3.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "path-key",
+    "version": "3.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "path-to-regexp",
+    "version": "0.1.13",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "picocolors",
+    "version": "1.1.1",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "picomatch",
+    "version": "4.0.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "platform",
+    "version": "1.3.6",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "postcss",
+    "version": "8.5.33",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "postcss-value-parser",
+    "version": "4.2.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "protobufjs",
+    "version": "7.6.6",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "proxy-addr",
+    "version": "2.0.8",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "qs",
+    "version": "6.16.2",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "range-parser",
+    "version": "1.2.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "raw-body",
+    "version": "2.5.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "react",
+    "version": "19.3.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "react-dom",
+    "version": "19.3.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "retry",
+    "version": "0.13.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "rolldown",
+    "version": "1.2.19",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "safe-buffer",
+    "version": "5.2.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "safer-buffer",
+    "version": "2.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "scheduler",
+    "version": "0.28.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "semver",
+    "version": "7.8.6",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "send",
+    "version": "0.19.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "ms",
+    "version": "2.1.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "serialize-error",
+    "version": "8.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "serve-static",
+    "version": "1.16.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "setprototypeof",
+    "version": "1.2.0",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "sharp",
+    "version": "0.35.5",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "shebang-command",
+    "version": "2.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "shebang-regex",
+    "version": "3.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "side-channel",
+    "version": "1.1.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "side-channel-list",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "side-channel-map",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "side-channel-weakmap",
+    "version": "1.0.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "signal-exit",
+    "version": "3.0.7",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "source-map-js",
+    "version": "1.2.4",
+    "license": "BSD-3-Clause",
+    "source": null
+  },
+  {
+    "name": "statuses",
+    "version": "2.0.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "streamsearch",
+    "version": "1.1.0",
+    "license": "See package notice",
+    "source": null
+  },
+  {
+    "name": "streamx",
+    "version": "2.28.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "strip-final-newline",
+    "version": "2.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tailwindcss",
+    "version": "4.3.5",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tapable",
+    "version": "2.3.4",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tar-stream",
+    "version": "3.1.7",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "text-decoder",
+    "version": "1.2.7",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "three",
+    "version": "0.187.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "throttleit",
+    "version": "2.1.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tinyglobby",
+    "version": "0.2.17",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "toidentifier",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "tslib",
+    "version": "2.9.1",
+    "license": "0BSD",
+    "source": null
+  },
+  {
+    "name": "tsx",
+    "version": "4.23.15",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "type-fest",
+    "version": "0.20.2",
+    "license": "(MIT OR CC0-1.0)",
+    "source": null
+  },
+  {
+    "name": "type-is",
+    "version": "1.6.18",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "typescript",
+    "version": "7.0.2",
+    "license": "Apache-2.0",
+    "source": null
+  },
+  {
+    "name": "undici",
+    "version": "6.29.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "undici-types",
+    "version": "6.21.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "unpipe",
+    "version": "1.0.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "update-browserslist-db",
+    "version": "1.4.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "utils-merge",
+    "version": "1.0.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "uuid",
+    "version": "14.0.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "vary",
+    "version": "1.1.2",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "vite",
+    "version": "8.3.8",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "web-streams-polyfill",
+    "version": "3.3.3",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "which",
+    "version": "2.0.2",
+    "license": "ISC",
+    "source": null
+  },
+  {
+    "name": "ws",
+    "version": "8.23.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "xdg-app-paths",
+    "version": "5.5.1",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "xdg-portable",
+    "version": "7.3.0",
+    "license": "MIT",
+    "source": null
+  },
+  {
+    "name": "yaml",
+    "version": "2.9.1",
+    "license": "ISC",
+    "source": "https://registry.npmjs.org/yaml/-/yaml-2.9.1.tgz"
+  },
+  {
+    "name": "zod",
+    "version": "4.1.11",
+    "license": "MIT",
+    "source": null
+  }
+]

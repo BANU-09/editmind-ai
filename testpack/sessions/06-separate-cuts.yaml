@@ -1,0 +1,13 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Cut the first 10 seconds"
+    expect: applied
+  - say: "Cut 30-35"
+    expect: applied
+  - say: "Add background music"
+    expect: applied
+  - say: "Put the intro back"
+    expect: applied

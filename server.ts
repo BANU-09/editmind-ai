@@ -1,3 +1,5 @@
+import {videoUploadStorage} from './server/hashedUpload';
+import {installSessionApi,apiErrorHandler} from './server/sessionApi';
 import {createHash} from 'node:crypto';
 import {Transform, Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
@@ -100,24 +102,6 @@ function parseVocabularyInput(raw: unknown): string[] {
     ).slice(0, 200);
   }
   return [];
-}
-
-function sendV1Error(
-  res: Response,
-  status: number,
-  code: string,
-  message: string,
-  retryable = false,
-  details?: unknown,
-) {
-  res.status(status).json({
-    error: {
-      code,
-      message,
-      retryable,
-      ...(details !== undefined ? { details } : {}),
-    },
-  });
 }
 
 function resolveConfinedPath(baseDir: string, untrustedName: string): string | null {
@@ -334,13 +318,7 @@ function hydrateProjectRow(row: Record<string, unknown>): ProjectRecord & { medi
 }
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname) || '.mp4';
-      cb(null, `${uuid()}${ext}`);
-    },
-  }),
+  storage: videoUploadStorage(UPLOADS_DIR),
   limits: { fileSize: cfg.maxUploadBytes },
   fileFilter: (_req, file, cb) => {
     const allowed = [
@@ -402,9 +380,9 @@ async function startServer() {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, x-guest-id, Idempotency-Key, Range, x-worker-secret, x-requested-with',
+      'Content-Type, Authorization, x-guest-id, Idempotency-Key, Range, x-worker-secret, x-requested-with, X-Correlation-Id',
     );
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length, X-Correlation-Id, Idempotency-Replayed');
     if (req.method === 'OPTIONS') {
       res.status(204).end();
       return;
@@ -422,15 +400,13 @@ async function startServer() {
   });
 
   // Build / verify bundled demo videos without blocking port 3000 bind or /api/demos, and resume interrupted analysis jobs
-  void ensureDemoLibraryReady()
-    .then(() => {
-      console.log('[EDITMIND AI] Demo library ready.');
-      if (!cfg.workerMode) {
-        resumeIncompleteAnalysisJobs();
-        resumeIncompleteRenders();
-      }
-    })
-    .catch((err) => console.error('[EDITMIND AI] Demo library error:', err));
+  if (process.env.WARM_DEMO_LIBRARY !== '0') {
+    void ensureDemoLibraryReady().catch(err=>console.error('[EditMind] Demo startup:',err.message));
+  }
+  if (!cfg.workerMode) {
+    resumeIncompleteAnalysisJobs();
+    resumeIncompleteRenders();
+  }
 
   // Health & capabilities
   app.get('/api/health', (_req, res) => {
@@ -2393,365 +2369,7 @@ async function startServer() {
     }
   });
 
-  // =========================================================================
-  // /api/v1 Production Worker Job Contract, 202 Async Status & Idempotency-Key
-  // =========================================================================
-  const registerV1Job = (
-    jobId: string,
-    kind: 'ingest' | 'import_url' | 'retranscribe' | 'export',
-    targetId: string,
-    projectId: string | null,
-    mediaId: string | null,
-  ) => {
-    db.prepare(
-      `INSERT OR REPLACE INTO v1_jobs (job_id, kind, target_id, project_id, media_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(jobId, kind, targetId, projectId, mediaId, new Date().toISOString());
-  };
-
-  const checkIdempotency = (req: Request, res: Response, endpoint: string): string | null => {
-    const key = req.header('Idempotency-Key')?.trim();
-    if (!key) return null;
-    const row = db
-      .prepare(
-        'SELECT status_code, response_json FROM idempotency_keys WHERE idempotency_key = ? AND method = ? AND path = ?',
-      )
-      .get(key, req.method, endpoint) as { status_code: number; response_json: string } | undefined;
-    if (row) {
-      res.status(row.status_code).json(JSON.parse(row.response_json));
-      return '__HIT__';
-    }
-    return key;
-  };
-
-  const saveIdempotency = (
-    key: string | null,
-    method: string,
-    endpoint: string,
-    statusCode: number,
-    body: unknown,
-  ) => {
-    if (!key || key === '__HIT__') return;
-    db.prepare(
-      `INSERT OR IGNORE INTO idempotency_keys (idempotency_key, method, path, status_code, response_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(key, method, endpoint, statusCode, JSON.stringify(body), new Date().toISOString());
-  };
-
-  app.post('/api/v1/media/ingest', upload.single('video'), async (req, res) => {
-    const idem = checkIdempotency(req, res, '/api/v1/media/ingest');
-    if (idem === '__HIT__') return;
-    try {
-      const file = req.file;
-      if (!file) {
-        sendV1Error(res, 400, 'MISSING_FILE', 'No video file was provided in the "video" field.', false);
-        return;
-      }
-      const sourceType = req.body.sourceType === 'recording' ? 'recording' : 'upload';
-      const title = (req.body.title as string | undefined)?.trim() || path.parse(file.originalname).name || 'Uploaded Video';
-      const requestedStreamIdx = parseInt(String(req.body.audioStreamIndex ?? '0'), 10);
-      const audioStreamIndex = Number.isFinite(requestedStreamIdx) ? requestedStreamIdx : 0;
-      const languageOverride = (req.body.languageOverride as string | undefined)?.trim() || undefined;
-      const vocabulary = parseVocabularyInput(req.body.vocabulary);
-      const ctx = getAuthContext(req);
-      const mimeType = file.mimetype && file.mimetype !== 'application/octet-stream' ? file.mimetype : 'video/mp4';
-
-      const result = await createIngestedMediaAndProject({
-        filePath: file.path,
-        originalFilename: file.originalname,
-        mimeType,
-        sourceType,
-        title,
-        audioStreamIndex,
-        languageOverride,
-        vocabulary,
-        ctx,
-        waitForSync: false,
-      });
-
-      registerV1Job(result.job.id, 'ingest', result.job.id, result.projectId, result.mediaId);
-      const payload = {
-        job_id: result.job.id,
-        media_id: result.mediaId,
-        project_id: result.projectId,
-        status: 'queued',
-        links: {
-          job: `/api/v1/jobs/${result.job.id}`,
-          project: `/api/projects/${result.projectId}`,
-          stream: `/api/media/${result.mediaId}/stream`,
-        },
-      };
-      saveIdempotency(idem, 'POST', '/api/v1/media/ingest', 202, payload);
-      res.status(202).json(payload);
-    } catch (err) {
-      sendV1Error(res, 500, 'INGEST_FAILED', err instanceof Error ? err.message : 'Ingest failed.', true);
-    }
-  });
-
-  app.post('/api/v1/media/import-url', async (req, res) => {
-    const idem = checkIdempotency(req, res, '/api/v1/media/import-url');
-    if (idem === '__HIT__') return;
-    const { url, title, languageOverride, vocabulary } = (req.body || {}) as {
-      url?: string;
-      title?: string;
-      languageOverride?: string;
-      vocabulary?: unknown;
-    };
-    if (!url || !url.trim()) {
-      sendV1Error(res, 400, 'MISSING_URL', 'Request body must include a non-empty "url".', false);
-      return;
-    }
-    const ctx = getAuthContext(req);
-    const { importJob, promise } = startUrlImportJob({
-      url: url.trim(),
-      title,
-      userId: ctx.userId,
-      guestToken: ctx.guestToken,
-      languageOverride: languageOverride?.trim() || undefined,
-      vocabulary: parseVocabularyInput(vocabulary),
-    });
-    void promise.catch(() => {});
-    await new Promise((r) => setTimeout(r, 80));
-    const latest = getUrlImportJob(importJob.id) || importJob;
-    if (latest.status === 'failed') {
-      sendV1Error(res, 400, 'URL_VALIDATION_FAILED', latest.error || 'URL rejected.', false, { import_id: latest.id });
-      return;
-    }
-    registerV1Job(latest.id, 'import_url', latest.id, latest.projectId || null, latest.mediaId || null);
-    const payload = {
-      job_id: latest.id,
-      import_id: latest.id,
-      status: latest.status === 'completed' ? 'succeeded' : 'running',
-      links: {
-        job: `/api/v1/jobs/${latest.id}`,
-        import_status: `/api/url-imports/${latest.id}`,
-      },
-    };
-    saveIdempotency(idem, 'POST', '/api/v1/media/import-url', 202, payload);
-    res.status(202).json(payload);
-  });
-
-  app.post('/api/v1/projects/:id/retranscribe', (req, res) => {
-    const endpoint = `/api/v1/projects/${req.params.id}/retranscribe`;
-    const idem = checkIdempotency(req, res, endpoint);
-    if (idem === '__HIT__') return;
-    const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as
-      | Record<string, unknown>
-      | undefined;
-    if (!proj) {
-      sendV1Error(res, 404, 'PROJECT_NOT_FOUND', 'Project not found.', false);
-      return;
-    }
-    const ctx = getAuthContext(req);
-    if (!canAccessOwnedRecord(ctx, proj)) {
-      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this project.', false);
-      return;
-    }
-    const mediaRow = db.prepare('SELECT * FROM media_assets WHERE id = ?').get(proj.media_id as string) as
-      | Record<string, unknown>
-      | undefined;
-    if (!mediaRow || !fs.existsSync(mediaRow.file_path as string)) {
-      sendV1Error(res, 404, 'MEDIA_MISSING', 'Source media file missing on server disk.', false);
-      return;
-    }
-    const { languageOverride, vocabulary, audioStreamIndex } = (req.body || {}) as {
-      languageOverride?: string;
-      vocabulary?: unknown;
-      audioStreamIndex?: number;
-    };
-    const prevAnalysis = JSON.parse(mediaRow.analysis_json as string) as MediaAnalysis;
-    const resolvedVocab =
-      vocabulary !== undefined
-        ? parseVocabularyInput(vocabulary)
-        : parseVocabularyInput(proj.vocabulary_json || mediaRow.vocabulary_json || prevAnalysis.vocabulary);
-    const { job } = startBackgroundAnalysisJob({
-      mediaId: mediaRow.id as string,
-      projectId: proj.id as string,
-      audioStreamIndex: audioStreamIndex ?? prevAnalysis.selectedAudioStream ?? 0,
-      languageOverride: languageOverride?.trim() || undefined,
-      vocabulary: resolvedVocab,
-    });
-    registerV1Job(job.id, 'retranscribe', job.id, proj.id as string, mediaRow.id as string);
-    const payload = {
-      job_id: job.id,
-      project_id: proj.id,
-      status: 'queued',
-      links: { job: `/api/v1/jobs/${job.id}`, project: `/api/projects/${proj.id}` },
-    };
-    saveIdempotency(idem, 'POST', endpoint, 202, payload);
-    res.status(202).json(payload);
-  });
-
-  app.post('/api/v1/projects/:id/exports', (req, res) => {
-    const endpoint = `/api/v1/projects/${req.params.id}/exports`;
-    const idem = checkIdempotency(req, res, endpoint);
-    if (idem === '__HIT__') return;
-    const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as
-      | Record<string, unknown>
-      | undefined;
-    if (!proj) {
-      sendV1Error(res, 404, 'PROJECT_NOT_FOUND', 'Project not found.', false);
-      return;
-    }
-    const ctx = getAuthContext(req);
-    if (!canAccessOwnedRecord(ctx, proj)) {
-      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this project.', false);
-      return;
-    }
-    const media = db.prepare('SELECT * FROM media_assets WHERE id = ?').get(proj.media_id as string) as
-      | Record<string, unknown>
-      | undefined;
-    if (!media) {
-      sendV1Error(res, 404, 'MEDIA_NOT_FOUND', 'Source media not found.', false);
-      return;
-    }
-    const { state, resolution = '720p', quality = 'balanced' } = (req.body || {}) as {
-      state?: ProjectState;
-      resolution?: ExportJob['resolution'];
-      quality?: ExportJob['quality'];
-    };
-    const activeState = state || (JSON.parse(proj.state_json as string) as ProjectState);
-    const mediaAnalysis = media.analysis_json ? (JSON.parse(media.analysis_json as string) as MediaAnalysis) : null;
-    const jobId = `exp-${uuid()}`;
-    const now = new Date().toISOString();
-    db.prepare(
-      `INSERT INTO exports (id, project_id, media_id, status, progress, resolution, quality, created_at)
-       VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)`,
-    ).run(jobId, proj.id, media.id, resolution, quality, now);
-
-    void runExportJob({
-      jobId,
-      projectId: proj.id as string,
-      mediaId: media.id as string,
-      sourceFilePath: media.file_path as string,
-      sourceHasAudio: Boolean(media.has_audio),
-      selectedAudioStream: mediaAnalysis?.selectedAudioStream ?? 0,
-      state: activeState,
-      resolution,
-      quality,
-    });
-    registerV1Job(jobId, 'export', jobId, proj.id as string, media.id as string);
-    const payload = {
-      job_id: jobId,
-      project_id: proj.id,
-      status: 'queued',
-      links: { job: `/api/v1/jobs/${jobId}`, export: `/api/exports/${jobId}` },
-    };
-    saveIdempotency(idem, 'POST', endpoint, 202, payload);
-    res.status(202).json(payload);
-  });
-
-  app.get('/api/v1/jobs/:job_id', (req, res) => {
-    const jobId = req.params.job_id;
-    const reg = db.prepare('SELECT * FROM v1_jobs WHERE job_id = ?').get(jobId) as
-      | { job_id: string; kind: string; target_id: string; project_id: string | null; media_id: string | null }
-      | undefined;
-    const ctx = getAuthContext(req);
-
-    if (reg?.kind === 'import_url' || jobId.startsWith('impurl-')) {
-      const impRow = db.prepare('SELECT user_id, guest_token FROM url_imports WHERE id = ?').get(reg?.target_id || jobId) as
-        | Record<string, unknown>
-        | undefined;
-      if (impRow && !canAccessOwnedRecord(ctx, impRow)) {
-        sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this job.', false);
-        return;
-      }
-      const imp = getUrlImportJob(reg?.target_id || jobId);
-      if (!imp) {
-        sendV1Error(res, 404, 'JOB_NOT_FOUND', 'URL import job not found.', false);
-        return;
-      }
-      res.json({
-        job_id: imp.id,
-        kind: 'import_url',
-        status:
-          imp.status === 'completed'
-            ? 'succeeded'
-            : imp.status === 'failed'
-              ? 'failed'
-              : imp.status === 'queued'
-                ? 'queued'
-                : 'running',
-        progress: imp.progress,
-        result_links: {
-          project: imp.projectId ? `/api/projects/${imp.projectId}` : null,
-          analysis_job: imp.analysisJobId ? `/api/v1/jobs/${imp.analysisJobId}` : null,
-        },
-        error: imp.error ? { code: 'URL_IMPORT_ERROR', message: imp.error, retryable: true } : null,
-      });
-      return;
-    }
-
-    if (reg?.kind === 'export' || jobId.startsWith('exp-')) {
-      const exp = db.prepare('SELECT * FROM exports WHERE id = ?').get(reg?.target_id || jobId) as
-        | Record<string, unknown>
-        | undefined;
-      if (!exp) {
-        sendV1Error(res, 404, 'JOB_NOT_FOUND', 'Export job not found.', false);
-        return;
-      }
-      const proj = db.prepare('SELECT user_id, guest_token, source_type FROM projects p LEFT JOIN media_assets m ON p.media_id = m.id WHERE p.id = ?').get(exp.project_id as string) as
-        | Record<string, unknown>
-        | undefined;
-      if (proj && !canAccessOwnedRecord(ctx, proj)) {
-        sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this export job.', false);
-        return;
-      }
-      res.json({
-        job_id: exp.id,
-        kind: 'export',
-        status:
-          exp.status === 'completed'
-            ? 'succeeded'
-            : exp.status === 'failed'
-              ? 'failed'
-              : exp.status === 'queued'
-                ? 'queued'
-                : 'running',
-        progress: exp.progress,
-        result_links: {
-          download: exp.output_url ? `${exp.output_url as string}?dl=1` : null,
-          stream: exp.output_url || null,
-          blob_url: (exp.blob_url as string | undefined) || null,
-        },
-        error: exp.error ? { code: 'EXPORT_FAILED', message: exp.error, retryable: true } : null,
-      });
-      return;
-    }
-
-    const analysisJob = getAnalysisJob(reg?.target_id || jobId);
-    if (!analysisJob) {
-      sendV1Error(res, 404, 'JOB_NOT_FOUND', 'Job not found.', false);
-      return;
-    }
-    const mediaRow = db.prepare('SELECT user_id, guest_token, source_type FROM media_assets WHERE id = ?').get(analysisJob.mediaId) as
-      | Record<string, unknown>
-      | undefined;
-    if (mediaRow && !canAccessOwnedRecord(ctx, mediaRow)) {
-      sendV1Error(res, 403, 'FORBIDDEN', 'Access denied to this job.', false);
-      return;
-    }
-    res.json({
-      job_id: analysisJob.id,
-      kind: reg?.kind || 'ingest',
-      status:
-        analysisJob.status === 'complete' || analysisJob.status === 'partial'
-          ? 'succeeded'
-          : analysisJob.status === 'failed' || analysisJob.status === 'cancelled'
-            ? 'failed'
-            : analysisJob.status === 'queued'
-              ? 'queued'
-              : 'running',
-      progress: analysisJob.overallProgress,
-      result_links: {
-        project: analysisJob.projectId ? `/api/projects/${analysisJob.projectId}` : null,
-        analysis_status: analysisJob.projectId ? `/api/projects/${analysisJob.projectId}/analysis-status` : null,
-      },
-      error: analysisJob.error
-        ? { code: 'TRANSCRIPTION_ERROR', message: analysisJob.error, retryable: true }
-        : null,
-    });
-  });
+  installSessionApi(app, {auth:getAuthContext, upload:upload.single('video'), ingest:createIngestedMediaAndProject});
 
   // =========================================================================
   // Separate Background Worker Routes (for Google Cloud Run WORKER_MODE=1)
@@ -3324,6 +2942,7 @@ async function startServer() {
   });
 
   // Explicit JSON error handler (handles Multer upload limit 413 and file filter rejections cleanly)
+  app.use(apiErrorHandler);
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (!err) {
       next();
@@ -3346,7 +2965,7 @@ async function startServer() {
   if (process.env.NODE_ENV === 'production') {
     const distDir = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distDir));
-    app.get('*', (_req, res) => {
+    app.get(/.*/, (_req, res) => {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   } else {

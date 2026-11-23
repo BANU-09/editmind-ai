@@ -1,0 +1,9 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Cut 30-40 and then add background music"
+    expect: applied
+  - say: "Undo"
+    expect: applied

@@ -696,6 +696,16 @@ export const api = {
       isLocalFallbackId(projectId),
     ),
 
+  createEditingSession: (projectId: string, key: string) =>
+    requestJson<{session_id:string;timeline_hash:string}>(`/api/v1/projects/${encodeURIComponent(projectId)}/sessions`, {
+      method:'POST', headers:{'Idempotency-Key':key}, body:'{}',
+    }),
+  sessionStep: (id: string, say: string, expectedHash: string, key: string) =>
+    requestJson<{status:'applied'|'needs_clarification'|'rejected';summary:string;question:string|null;options:string[];timeline_hash:string;warnings?:string[]}>(`/api/v1/sessions/${encodeURIComponent(id)}/steps`, {
+      method:'POST', headers:{'Idempotency-Key':key}, body:JSON.stringify({say,expected_hash:expectedHash}),
+    }),
+  editingSession: (id: string) =>
+    requestJson<{timeline:ProjectState;timeline_hash:string}>(`/api/v1/sessions/${encodeURIComponent(id)}`),
   planAiEdit: (projectId: string, prompt: string, currentState: ProjectState, history: Array<{role:string;text:string;status?:string;ranges?:number[][]}> = []) =>
     isLocalFallbackId(projectId)
       ? Promise.reject(new Error('Open a server-backed project to use the editing assistant.'))

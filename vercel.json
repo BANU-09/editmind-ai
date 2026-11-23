@@ -5,10 +5,15 @@
   "buildCommand": "VITE_MEDIA_WORKER=1 npm run build && node scripts/package-media-worker.mjs",
   "functions": {
     "api/assistant.mjs": { "includeFiles":"scripts/start-edit-model.sh", "maxDuration": 300 },
+    "api/gateway.mjs": { "maxDuration": 300 },
     "api/backend.mjs": { "includeFiles": ".media-worker/runtime.tgz", "maxDuration": 300 }
   },
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/v1/:rest*", "destination": "/api/gateway?route=api/v1/:rest*" },
+    { "source": "/health", "destination": "/api/gateway?route=health" },
+    { "source": "/ready", "destination": "/api/gateway?route=ready" },
+    { "source": "/openapi.yaml", "destination": "/api/gateway?route=openapi.yaml" },
     {
       "source": "/((?!api/|assets/|src/assets/|favicon\\.ico|.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff2?|mp4|webm|wav|mp3)).*)",
       "destination": "/index.html"

@@ -1,0 +1,9 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Auto-caption the whole video"
+    expect: applied
+  - say: "Make all captions red"
+    expect: applied

@@ -690,6 +690,9 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
     const clipMp4 = path.join(workDir, `clip_${i}.mp4`);
     const safeTopic = beat.topic.replace(/[':]/g, '');
     const safeSpeaker = beat.speaker.replace(/[':]/g, '');
+    const defaultFont = process.platform === 'win32' ? path.join(process.env.WINDIR || 'C:/Windows', 'Fonts', 'arial.ttf') : '';
+    const fontFile = process.env.DEMO_FONT_FILE || defaultFont;
+    const fontOption = fontFile ? "fontfile='" + fontFile.replaceAll('\\', '/').replaceAll(':', '\\:') + "':" : '';
     await execFileAsync('ffmpeg', [
       '-y',
       '-loop',
@@ -701,7 +704,7 @@ async function buildSingleDemo(spec: DemoSpec): Promise<void> {
       '-t',
       totalClipDur.toFixed(3),
       '-vf',
-      `${smoothMotionFilter(beat.zoomMode)},${hueShift},drawbox=x=36:y=32:w=420:h=54:color=black@0.58:t=fill,drawtext=text='${safeTopic}  |  ${safeSpeaker}':fontcolor=white:fontsize=20:x=52:y=50`,
+      `${smoothMotionFilter(beat.zoomMode)},${hueShift},drawbox=x=36:y=32:w=420:h=54:color=black@0.58:t=fill,drawtext=${fontOption}text='${safeTopic}  |  ${safeSpeaker}':fontcolor=white:fontsize=20:x=52:y=50`,
       '-c:v',
       'libx264',
       '-preset',

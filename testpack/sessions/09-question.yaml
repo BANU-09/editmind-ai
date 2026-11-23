@@ -1,0 +1,11 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Make it shorter"
+    expect: needs_clarification
+    answer: "Cancel"
+    expect_answer: applied
+  - say: "Keep only 30 to 80 seconds"
+    expect: applied

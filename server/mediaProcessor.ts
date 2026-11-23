@@ -51,6 +51,8 @@ export interface ProbeMetadata {
   width: number;
   height: number;
   fps: number;
+  variableFrameRate: boolean;
+  videoDurationSec?: number;
   hasAudio: boolean;
   detectedAudioStreams: number;
   audioStreams: AudioStreamInfo[];
@@ -559,6 +561,7 @@ export async function prepareFastMediaRecord(params: {
       width: meta.width,
       height: meta.height,
       fps: meta.fps,
+      variableFrameRate: meta.variableFrameRate,
       hasAudio,
       detectedAudioStreams: meta.detectedAudioStreams,
       audioStreams: meta.audioStreams,
@@ -755,6 +758,7 @@ async function finalizeTranscriptionOutputs(params: {
     width: meta.width,
     height: meta.height,
     fps: meta.fps,
+    variableFrameRate: meta.variableFrameRate,
     hasAudio: meta.hasAudio,
     detectedAudioStreams: meta.detectedAudioStreams,
     audioStreams: meta.audioStreams,
@@ -930,6 +934,7 @@ export async function executeAnalysisJob(
       width: meta.width,
       height: meta.height,
       fps: meta.fps,
+      variableFrameRate: meta.variableFrameRate,
       hasAudio: false,
       detectedAudioStreams: 0,
       audioStreams: [],

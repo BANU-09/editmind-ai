@@ -1,0 +1,11 @@
+video: ../media/studio.mp4
+title: Studio session
+resolution: 480p
+quality: fast
+steps:
+  - say: "Speed up from 60 to 80 by 10x"
+    expect: rejected
+  - say: "Cut 0-120"
+    expect: rejected
+  - say: "Cut 2-8 and then cut 150-160"
+    expect: rejected

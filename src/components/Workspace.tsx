@@ -282,6 +282,9 @@ function WorkspaceInner({
   // Right AI Assistant
   const [promptInput, setPromptInput] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [sessionMode, setSessionMode] = useState(false);
+  const sessionRef = useRef<{project:string; id:string; hash:string; local:ProjectState} | null>(null);
+  const pendingStep = useRef<{id:string; text:string; key:string} | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const formatWelcomeText = (a: MediaAnalysis) => {
     const wordTotal =
@@ -665,6 +668,38 @@ function WorkspaceInner({
     setAiBusy(true);
 
     try {
+      if (sessionMode && !localProject) {
+        let session=sessionRef.current;
+        // A manual edit or undo branches from what the user sees on screen.
+        if (!session || session.project!==project.id || session.local!==state) {
+          if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+          await persistNow(title,state,history,historyIndex,versions);
+          const created=await api.createEditingSession(project.id,crypto.randomUUID());
+          session={project:project.id,id:created.session_id,hash:created.timeline_hash,local:state};
+          sessionRef.current=session;
+        }
+        let pending=pendingStep.current;
+        if (!pending || pending.id!==session.id || pending.text!==text) {
+          pending={id:session.id,text,key:crypto.randomUUID()};
+          pendingStep.current=pending;
+        }
+        const result=await api.sessionStep(session.id,text,session.hash,pending.key);
+        if (result.status==='applied' && session.hash!==result.timeline_hash) {
+          const latest=await api.editingSession(session.id);
+          session.local=latest.timeline;
+          commitStateChange(latest.timeline,result.summary,text);
+        }
+        session.hash=result.timeline_hash;
+        pendingStep.current=null;
+        const reply=result.status==='needs_clarification'
+          ? [result.question,...result.options].filter(Boolean).join('\n')
+          : result.summary;
+        setMessages(prev=>[...prev,{id:crypto.randomUUID(),role:'assistant',
+          text:[reply,...(result.warnings||[])].filter(Boolean).join('\n'),
+          status:result.status==='rejected'?'error':result.status==='applied'?'applied':'clarification'}]);
+        if(result.status==='applied' && /^render[.!]?$/i.test(text)) setActiveModal('export');
+        return;
+      }
       const { plan, impact, searchHits, stagesExecuted } = await api.planAiEdit(
         project.id,
         text,
@@ -2009,6 +2044,14 @@ function WorkspaceInner({
           </div>
 
           {/* Independent Scrollable Conversation & Edit Impact Cards */}
+          {!localProject && <label className="flex items-center justify-between gap-2 px-4 py-2 text-xs text-slate-300 border-b border-violet-500/20">
+            Prompt mode
+            <select aria-label="Prompt mode" disabled={aiBusy} value={sessionMode?'session':'assistant'}
+              onChange={e=>setSessionMode(e.target.value==='session')}
+              className="rounded-md bg-slate-900 px-2 py-1 text-slate-100 border border-slate-700">
+              <option value="assistant">AI conversation</option><option value="session">Editing session</option>
+            </select>
+          </label>}
           <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-3">
             {messages.map((msg) => (
               <div
