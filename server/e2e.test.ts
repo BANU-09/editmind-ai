@@ -173,7 +173,8 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   let finalJob = initialJob;
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 400));
-    const pollRes = await fetch(`${BASE_URL}/api/exports/${initialJob.id}`);
+    const pollRes = await fetch(`${BASE_URL}/api/exports/${initialJob.id}`, {headers:{'x-guest-id':GUEST_ID}});
+    assert.equal(pollRes.status,200,'The owner can poll the export');
     const pollData = await pollRes.json();
     finalJob = pollData.job;
     if (finalJob.status === 'completed' || finalJob.status === 'failed') break;
@@ -183,7 +184,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.ok(finalJob.fileSizeBytes > 1024);
   assert.ok(finalJob.durationSec > 1.5 && finalJob.durationSec < 3.0);
 
-  const dlRes = await fetch(`${BASE_URL}${finalJob.outputUrl}`);
+  const dlRes = await fetch(`${BASE_URL}${finalJob.outputUrl}`, {headers:{'x-guest-id':GUEST_ID}});
   assert.equal(dlRes.status, 200);
   const dlBytes = await dlRes.arrayBuffer();
   assert.ok(dlBytes.byteLength > 1024);
@@ -323,7 +324,8 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   let pJobFinal = pJobInit;
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 400));
-    const pollRes = await fetch(`${BASE_URL}/api/exports/${pJobInit.id}`);
+    const pollRes = await fetch(`${BASE_URL}/api/exports/${pJobInit.id}`, {headers:{'x-guest-id':GUEST_ID}});
+    assert.equal(pollRes.status,200,'The owner can poll the portrait export');
     const pollData = await pollRes.json();
     pJobFinal = pollData.job;
     if (pJobFinal.status === 'completed' || pJobFinal.status === 'failed') break;
@@ -331,7 +333,7 @@ test('full backend E2E: demos, real video upload (unique mediaId), AI prompt pla
   assert.equal(pJobFinal.status, 'completed', `Portrait export failed: ${pJobFinal.error}`);
 
   // Verify portrait exported MP4 dimensions with ffprobe!
-  const dlPortraitRes = await fetch(`${BASE_URL}${pJobFinal.outputUrl}`);
+  const dlPortraitRes = await fetch(`${BASE_URL}${pJobFinal.outputUrl}`, {headers:{'x-guest-id':GUEST_ID}});
   assert.equal(dlPortraitRes.status, 200);
   const tmpExportCheck = path.resolve(process.env.STORAGE_DIR || 'storage', 'test_portrait_out.mp4');
   fs.writeFileSync(tmpExportCheck, Buffer.from(await dlPortraitRes.arrayBuffer()));

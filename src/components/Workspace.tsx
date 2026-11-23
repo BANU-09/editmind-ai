@@ -692,7 +692,7 @@ function WorkspaceInner({
         session.hash=result.timeline_hash;
         pendingStep.current=null;
         const reply=result.status==='needs_clarification'
-          ? [result.question,...result.options].filter(Boolean).join('\n')
+            ? [result.question,...result.options,'Time policy: original source seconds.'].filter(Boolean).join('\n')
           : result.summary;
         setMessages(prev=>[...prev,{id:crypto.randomUUID(),role:'assistant',
           text:[reply,...(result.warnings||[])].filter(Boolean).join('\n'),
